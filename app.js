@@ -11,6 +11,7 @@ const $ = id => document.getElementById(id);
 const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const MONTHS_G = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const WD = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const WDW = ['Пт','Сб','Вс','Пн','Вт','Ср','Чт'];      // дни рабочей недели: пятница → четверг
 const pad = n => String(n).padStart(2, '0');
 const iso = (y, m, d) => y + '-' + pad(m + 1) + '-' + pad(d);          // YYYY-MM-DD, m: 0..11
 const dateToIso = d => iso(d.getFullYear(), d.getMonth(), d.getDate());
@@ -29,8 +30,8 @@ function el(tag, className, text) {
   if (text !== undefined) e.textContent = text;
   return e;
 }
-function weekRange(s) {                       // понедельник..воскресенье недели, содержащей дату s
-  const p = parseIso(s), dow = (new Date(p.y, p.m, p.d).getDay() + 6) % 7, days = [];
+function weekRange(s) {                       // пятница..четверг недели, содержащей дату s
+  const p = parseIso(s), dow = (new Date(p.y, p.m, p.d).getDay() + 2) % 7, days = [];
   for (let i = 0; i < 7; i++) days.push(dateToIso(new Date(p.y, p.m, p.d - dow + i)));
   return days;
 }
@@ -346,11 +347,17 @@ function shiftMonth(delta) {
 
 /* ================= 8–9. Weekly / monthly statistics (из сохранённых дней) ================= */
 function summarize(list) {                              // list — дневные отчёты
-  const s = { days: list.length, cash: 0, terminal: 0, total: 0, rent: 0, expense: 0, salary: 0, result: 0, best: null, worst: null };
+  const s = { days: list.length, cash: 0, terminal: 0, total: 0, rent: 0, expense: 0, salary: 0, result: 0, best: null, worst: null, byEmp: {} };
   list.forEach(r => {
     const c = calc(r);
     s.cash += r.cash; s.terminal += r.terminal; s.total += c.total; s.rent += c.rent;
     s.expense += c.expense; s.salary += c.salary; s.result += c.result;
+    r.employees.forEach(e => {                          // зарплата каждого сотрудника
+      const sal = num(e.salary), k = e.id || e.name;
+      const x = s.byEmp[k] || (s.byEmp[k] = { name: e.name, days: 0, sum: 0, last: '' });
+      x.sum += sal; if (sal > 0) x.days++;
+      if (r.date >= x.last) { x.last = r.date; x.name = e.name; }
+    });
     if (!s.best || c.result > s.best.v) s.best = { v: c.result, date: r.date };
     if (!s.worst || c.result < s.worst.v) s.worst = { v: c.result, date: r.date };
   });
@@ -377,7 +384,7 @@ function renderStats() {
     const wk = el('div', 'week');
     days.forEach((d, i) => {
       const r = reports[reportKey(state.objId, d)];
-      const row = el('div'); row.append(el('span', '', WD[i] + ', ' + dmy(d)));
+      const row = el('div'); row.append(el('span', '', WDW[i] + ', ' + dmy(d)));
       row.append(el('b', r ? (calc(r).result < 0 ? 'neg-t' : calc(r).result > 0 ? 'pos-t' : '') : '', r ? fmt(calc(r).result) : '—'));
       wk.appendChild(row);
     });
@@ -400,6 +407,16 @@ function renderStats() {
     cell('Итог ' + unit, fmt(s.result), true, s.result < 0 ? 'neg-t' : s.result > 0 ? 'pos-t' : '')
   );
   body.appendChild(g);
+  const emps = Object.keys(s.byEmp).map(k => s.byEmp[k]).filter(x => x.sum > 0).sort((a, b) => b.sum - a.sum);
+  const box = el('div', 'week');
+  if (!emps.length) box.appendChild(el('div', 'empty', 'Нет данных за этот период'));
+  emps.forEach(x => {
+    const row = el('div');
+    row.append(el('span', '', x.name || 'Без имени'), el('b', '', x.days + ' дн. · ' + fmt(x.sum)));
+    box.appendChild(row);
+  });
+  if (emps.length) { const t = el('div'); t.append(el('span', '', 'Всего зарплат'), el('b', '', fmt(s.salary))); box.appendChild(t); }
+  body.append(el('h3', '', 'Зарплаты по сотрудникам'), box);
 }
 
 /* ================= 10. Dashboard + chart ================= */

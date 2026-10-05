@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Финансовый отчёт</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<section id="login" class="login" hidden>
+  <div class="card login-box">
+    <h1>Финансовый отчёт</h1>
+    <p class="sub">Войдите, чтобы видеть свои отчёты на любом устройстве</p>
+    <button id="loginBtn" class="btn btn-primary">Войти через Google</button>
+    <p id="loginErr" class="err"></p>
+  </div>
+</section>
+
+<main class="app" id="appMain" hidden>
+  <div id="banner" class="banner" hidden></div>
+
+  <header class="top">
+    <div>
+      <h1>Финансовый отчёт</h1>
+      <p class="sub">Дневной финансовый отчёт</p>
+    </div>
+    <button id="addObjectBtn" class="btn btn-primary">+ Добавить объект</button>
+  </header>
+
+  <section class="card">
+    <div class="label">Объект</div>
+    <div class="obj-row">
+      <select id="objectSelect" aria-label="Объект"></select>
+      <div class="menu-wrap">
+        <button id="menuBtn" class="btn icon" aria-label="Меню объекта">⋮</button>
+        <div id="menu" class="menu" hidden>
+          <button id="renameBtn">Переименовать</button>
+          <button id="settingsBtn">Настройки</button>
+          <button id="deleteObjectBtn" class="danger">Удалить</button>
+        </div>
+      </div>
+    </div>
+    <div id="settings" class="settings" hidden>
+      <label>Название объекта<input type="text" id="setName"></label>
+      <label>Цена за человека, ₽<input type="number" id="setPrice" min="0" inputmode="decimal"></label>
+      <div class="row">
+        <button id="saveSettingsBtn" class="btn btn-primary">Сохранить настройки</button>
+        <button id="closeSettingsBtn" class="btn">Закрыть</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="dash">
+    <div class="card stat"><div class="label">Сегодня</div><div id="dashToday" class="big">0 ₽</div><div id="dashTodaySub" class="hint"></div></div>
+    <div class="card stat"><div class="label">Эта неделя</div><div id="dashWeek" class="big">0 ₽</div><div id="dashWeekSub" class="hint"></div></div>
+    <div class="card stat"><div class="label">Этот месяц</div><div id="dashMonth" class="big">0 ₽</div><div id="dashMonthSub" class="hint"></div></div>
+  </section>
+
+  <section class="card">
+    <div class="label">Дата отчёта</div>
+    <div class="row">
+      <input type="date" id="dateInput" aria-label="Дата отчёта">
+      <span id="status" class="badge"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Итоги дня</h2>
+    <div class="grid">
+      <label>Количество людей<input type="number" id="peopleInput" min="0" step="1" inputmode="numeric" placeholder="0"></label>
+      <label>Цена за человека, ₽<input type="number" id="priceInput" min="0" inputmode="decimal" placeholder="0"></label>
+      <div class="calc"><span>Сумма аренды</span><b id="rentTotal">0 ₽</b></div>
+      <label>Наличные, ₽<input type="number" id="cashInput" min="0" inputmode="decimal" placeholder="0"></label>
+      <label>Терминал, ₽<input type="number" id="terminalInput" min="0" inputmode="decimal" placeholder="0"></label>
+      <div class="calc"><span>Всего</span><b id="moneyTotal">0 ₽</b></div>
+      <label>Расходы, ₽<input type="number" id="expenseInput" min="0" inputmode="decimal" placeholder="0"></label>
+    </div>
+
+    <h3>Сотрудники и зарплаты</h3>
+    <div id="employeesList" class="emps"></div>
+    <button id="toggleEmpFormBtn" class="btn">+ Добавить сотрудника</button>
+    <div id="empForm" class="row emp-form" hidden>
+      <input type="text" id="empNameInput" placeholder="Имя сотрудника" aria-label="Имя сотрудника">
+      <input type="number" id="empSalaryInput" min="0" inputmode="decimal" placeholder="Зарплата, ₽" aria-label="Зарплата">
+      <button id="saveEmpBtn" class="btn btn-primary">Сохранить</button>
+    </div>
+    <div class="calc"><span>Всего зарплаты</span><b id="salaryTotal">0 ₽</b></div>
+
+    <div id="resultCard" class="result zero">
+      <span>Итог дня</span>
+      <b id="dayResult">0 ₽</b>
+    </div>
+    <div class="row">
+      <button id="saveReportBtn" class="btn btn-primary">Сохранить отчёт</button>
+      <button id="clearBtn" class="btn">Очистить форму</button>
+      <button id="deleteReportBtn" class="btn btn-danger" hidden>Удалить отчёт</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>История отчётов</h2>
+    <button id="toggleCalBtn" class="btn btn-primary">📅 Открыть календарь</button>
+    <div id="historyBox" hidden>
+      <div class="cal-head">
+        <button id="prevMonthBtn" class="btn icon" aria-label="Предыдущий месяц">‹</button>
+        <strong id="calTitle"></strong>
+        <button id="nextMonthBtn" class="btn icon" aria-label="Следующий месяц">›</button>
+      </div>
+      <div class="cal-grid cal-wd"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+      <div id="calGrid" class="cal-grid"></div>
+      <p class="hint"><i class="dot"></i> — есть сохранённый отчёт</p>
+    </div>
+    <h3>Сохранённые отчёты</h3>
+    <div id="historyList" class="history"></div>
+  </section>
+
+  <section class="card">
+    <h2>Статистика</h2>
+    <div class="tabs">
+      <button id="weekBtn" class="btn active">Неделя</button>
+      <button id="monthBtn" class="btn">Месяц</button>
+    </div>
+    <div id="statsBody"></div>
+  </section>
+
+  <section class="card">
+    <h2>Динамика результатов</h2>
+    <p class="hint" id="chartSub"></p>
+    <canvas id="chart" height="220"></canvas>
+  </section>
+
+  <section class="card account">
+    <div class="label">Аккаунт: <span id="userEmail"></span></div>
+    <div class="row">
+      <button id="exportBtn" class="btn">Скачать копию данных</button>
+      <button id="importLocalBtn" class="btn" hidden>Перенести данные из этого браузера</button>
+      <button id="logoutBtn" class="btn btn-danger">Выйти</button>
+    </div>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

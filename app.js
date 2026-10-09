@@ -538,9 +538,11 @@ function bind() {
   $('nextMonthBtn').addEventListener('click', () => shiftMonth(1));
   $('weekBtn').addEventListener('click', () => { state.tab = 'week'; renderStats(); });
   $('monthBtn').addEventListener('click', () => { state.tab = 'month'; renderStats(); });
-  $('copyDayBtn').addEventListener('click', e => copyReport('day', false, e.currentTarget));
-  $('copyAllBtn').addEventListener('click', e => copyReport(state.tab, false, e.currentTarget));
-  $('copyObjBtn').addEventListener('click', e => copyReport(state.tab, true, e.currentTarget));
+  // кнопки копирования: если в index.html их нет (старая версия), остальное приложение всё равно работает
+  [['copyDayBtn', () => 'day', false], ['copyAllBtn', () => state.tab, false], ['copyObjBtn', () => state.tab, true]].forEach(c => {
+    const b = $(c[0]);
+    if (b) b.addEventListener('click', () => copyReport(c[1](), c[2], b));
+  });
   window.addEventListener('resize', renderChart);
 }
 

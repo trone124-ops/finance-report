@@ -424,7 +424,7 @@ function renderStats() {
 const n2 = n => String(Math.round(n * 100) / 100);
 function blockText(name, s, withEmps) {
   const L = [name, 'Людей ' + n2(s.people), 'Аренда ' + n2(s.rent), 'Касса ' + n2(s.total), 'Нал ' + n2(s.cash),
-    'Тер ' + n2(s.terminal), 'Зп ' + n2(s.salary), 'Расход ' + n2(s.expense), 'Остаток ' + n2(s.result)];
+    'Тер ' + n2(s.terminal) + ' (3%=' + n2(s.terminal * 0.03) + ')', 'Зп ' + n2(s.salary), 'Расход ' + n2(s.expense), 'Остаток ' + n2(s.result)];
   const emps = withEmps ? empList(s) : [];
   if (emps.length) {
     L.push('', 'Зп по сотрудникам:');

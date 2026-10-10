@@ -152,12 +152,13 @@ const curObj = () => objects.find(o => o.id === state.objId) || null;
 
 /* ================= 5. Calculations ================= */
 const FEE_RATE = 0.03;                                  // комиссия терминала 3%
+const round10 = n => Math.sign(n) * Math.round(Math.abs(n) / 10) * 10 || 0;   // округление до десятков: 88987 → 88990, 77953 → 77950
 function calc(r) {
   const rent = r.people * r.rentPrice;
   const total = r.cash + r.terminal;
   const salary = r.employees.reduce((s, e) => s + num(e.salary), 0);
-  const fee = r.terminal * FEE_RATE;
-  return { rent, total, salary, fee, expense: r.expense, result: total - rent - r.expense - salary - fee };
+  const fee = round10(r.terminal * FEE_RATE);
+  return { rent, total, salary, fee, expense: r.expense, result: round10(total - rent - r.expense - salary - fee) };
 }
 const getEmps = () => state.snap || curObj().employees;     // сохранённый отчёт — снимок; новый — сотрудники объекта
 
@@ -369,7 +370,7 @@ function summarize(list) {                              // list — дневны
     if (!s.best || c.result > s.best.v) s.best = { v: c.result, date: r.date };
     if (!s.worst || c.result < s.worst.v) s.worst = { v: c.result, date: r.date };
   });
-  s.avg = s.days ? s.result / s.days : 0;
+  s.avg = s.days ? round10(s.result / s.days) : 0;
   return s;
 }
 const empList = s => Object.keys(s.byEmp).map(k => s.byEmp[k]).filter(x => x.sum > 0).sort((a, b) => b.sum - a.sum);

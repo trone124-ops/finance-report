@@ -151,11 +151,13 @@ const reportKey = (objId, date) => objId + '_' + date;
 const curObj = () => objects.find(o => o.id === state.objId) || null;
 
 /* ================= 5. Calculations ================= */
+const FEE_RATE = 0.03;                                  // комиссия терминала 3%
 function calc(r) {
   const rent = r.people * r.rentPrice;
   const total = r.cash + r.terminal;
   const salary = r.employees.reduce((s, e) => s + num(e.salary), 0);
-  return { rent, total, salary, expense: r.expense, result: total - rent - r.expense - salary };
+  const fee = r.terminal * FEE_RATE;
+  return { rent, total, salary, fee, expense: r.expense, result: total - rent - r.expense - salary - fee };
 }
 const getEmps = () => state.snap || curObj().employees;     // сохранённый отчёт — снимок; новый — сотрудники объекта
 
@@ -173,6 +175,7 @@ function renderCalc() {
   $('rentTotal').textContent = fmt(c.rent);
   $('moneyTotal').textContent = fmt(c.total);
   $('salaryTotal').textContent = fmt(c.salary);
+  $('feeTotal').textContent = fmt(c.fee);
   $('dayResult').textContent = fmt(c.result);
   $('resultCard').className = 'result ' + cls(c.result);
 }
@@ -284,9 +287,14 @@ function setDate(d) {
   const p = parseIso(d); state.calY = p.y; state.calM = p.m;
   loadDate();
 }
+function openReport(d) {                               // клик по дню календаря или по записи истории
+  setDate(d);
+  const c = $('reportCard');
+  if (c && c.scrollIntoView) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 function saveReport() {
   const r = readForm(), c = calc(r);
-  r.rentTotal = c.rent; r.totalCash = c.total; r.salaryTotal = c.salary; r.dailyResult = c.result;
+  r.rentTotal = c.rent; r.fee = c.fee; r.totalCash = c.total; r.salaryTotal = c.salary; r.dailyResult = c.result;
   r.savedAt = new Date().toISOString();
   reports[reportKey(r.objectId, r.date)] = r;
   cloudSetReport(reportKey(r.objectId, r.date), r);
@@ -319,7 +327,7 @@ function renderHistory() {
     const b = el('button', 'hist' + (r.date === state.date ? ' sel' : ''));
     const left = el('span'); left.append(document.createTextNode(longDate(r.date)), el('small', '', r.objectName));
     b.append(left, el('b', cls(res) === 'neg' ? 'neg-t' : cls(res) === 'pos' ? 'pos-t' : '', 'Итог: ' + fmt(res)));
-    b.addEventListener('click', () => setDate(r.date));
+    b.addEventListener('click', () => openReport(r.date));
     box.appendChild(b);
   });
 }
@@ -336,7 +344,7 @@ function renderCalendar() {
     const s = iso(y, m, d);
     const b = el('button', 'day' + (has.has(s) ? ' has' : '') + (s === today ? ' today' : '') + (s === state.date ? ' sel' : ''), String(d));
     b.title = has.has(s) ? 'Есть отчёт' : '';
-    b.addEventListener('click', () => setDate(s));
+    b.addEventListener('click', () => openReport(s));
     grid.appendChild(b);
   }
 }
@@ -347,10 +355,10 @@ function shiftMonth(delta) {
 
 /* ================= 8–9. Weekly / monthly statistics (из сохранённых дней) ================= */
 function summarize(list) {                              // list — дневные отчёты
-  const s = { days: list.length, people: 0, cash: 0, terminal: 0, total: 0, rent: 0, expense: 0, salary: 0, result: 0, best: null, worst: null, byEmp: {} };
+  const s = { days: list.length, people: 0, fee: 0, cash: 0, terminal: 0, total: 0, rent: 0, expense: 0, salary: 0, result: 0, best: null, worst: null, byEmp: {} };
   list.forEach(r => {
     const c = calc(r);
-    s.people += r.people; s.cash += r.cash; s.terminal += r.terminal; s.total += c.total; s.rent += c.rent;
+    s.people += r.people; s.fee += c.fee; s.cash += r.cash; s.terminal += r.terminal; s.total += c.total; s.rent += c.rent;
     s.expense += c.expense; s.salary += c.salary; s.result += c.result;
     r.employees.forEach(e => {                          // зарплата каждого сотрудника
       const sal = num(e.salary), k = e.id || e.name;
@@ -401,7 +409,7 @@ function renderStats() {
   g.append(
     cell('Дней с отчётами', String(s.days)), cell('Наличные', fmt(s.cash)),
     cell('Терминал', fmt(s.terminal)), cell('Всего', fmt(s.total)),
-    cell('Аренда', fmt(s.rent)), cell('Расходы', fmt(s.expense)),
+    cell('Аренда', fmt(s.rent)), cell('Расходы', fmt(s.expense)), cell('Комиссия 3%', fmt(s.fee)),
     cell('Зарплаты', fmt(s.salary)), cell('Средний итог за день', fmt(s.avg)),
     cell('Лучший день', s.best ? dmy(s.best.date) + ' · ' + fmt(s.best.v) : '—'),
     cell('Худший день', s.worst ? dmy(s.worst.date) + ' · ' + fmt(s.worst.v) : '—'),
@@ -424,7 +432,7 @@ function renderStats() {
 const n2 = n => String(Math.round(n * 100) / 100);
 function blockText(name, s, withEmps) {
   const L = [name, 'Людей ' + n2(s.people), 'Аренда ' + n2(s.rent), 'Касса ' + n2(s.total), 'Нал ' + n2(s.cash),
-    'Тер ' + n2(s.terminal) + ' (3%=' + n2(s.terminal * 0.03) + ')', 'Зп ' + n2(s.salary), 'Расход ' + n2(s.expense), 'Остаток ' + n2(s.result)];
+    'Тер ' + n2(s.terminal) + ' (3%=' + n2(s.fee) + ')', 'Зп ' + n2(s.salary), 'Расход ' + n2(s.expense), 'Остаток ' + n2(s.result)];
   const emps = withEmps ? empList(s) : [];
   if (emps.length) {
     L.push('', 'Зп по сотрудникам:');
@@ -532,6 +540,7 @@ function bind() {
   $('deleteReportBtn').addEventListener('click', deleteReport);
   $('toggleCalBtn').addEventListener('click', () => {
     const box = $('historyBox'); box.hidden = !box.hidden;
+    $('savedBox').hidden = !box.hidden;               // пока открыт календарь, список отчётов скрыт
     $('toggleCalBtn').textContent = box.hidden ? '📅 Открыть календарь' : '📅 Скрыть календарь';
   });
   $('prevMonthBtn').addEventListener('click', () => shiftMonth(-1));

@@ -64,7 +64,7 @@
     </div>
   </section>
 
-  <section class="card">
+  <section class="card" id="reportCard">
     <h2>Итоги дня</h2>
     <div class="grid">
       <label>Количество людей<input type="number" id="peopleInput" min="0" step="1" inputmode="numeric" placeholder="0"></label>
@@ -72,6 +72,7 @@
       <div class="calc"><span>Сумма аренды</span><b id="rentTotal">0 ₽</b></div>
       <label>Наличные, ₽<input type="number" id="cashInput" min="0" inputmode="decimal" placeholder="0"></label>
       <label>Терминал, ₽<input type="number" id="terminalInput" min="0" inputmode="decimal" placeholder="0"></label>
+      <div class="calc"><span>Комиссия терминала 3%</span><b id="feeTotal">0 ₽</b></div>
       <div class="calc"><span>Всего</span><b id="moneyTotal">0 ₽</b></div>
       <label>Расходы, ₽<input type="number" id="expenseInput" min="0" inputmode="decimal" placeholder="0"></label>
     </div>
@@ -111,8 +112,10 @@
       <div id="calGrid" class="cal-grid"></div>
       <p class="hint"><i class="dot"></i> — есть сохранённый отчёт</p>
     </div>
-    <h3>Сохранённые отчёты</h3>
-    <div id="historyList" class="history"></div>
+    <div id="savedBox">
+      <h3>Сохранённые отчёты</h3>
+      <div id="historyList" class="history"></div>
+    </div>
   </section>
 
   <section class="card">

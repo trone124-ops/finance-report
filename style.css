@@ -225,3 +225,41 @@ input:hover,select:hover{border-color:#4a4a58}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
+
+/* имя пользователя */
+.greet{margin:3px 0 0;color:var(--gold);font-weight:700;font-size:.95rem}
+.greet:empty{display:none}
+.who{margin:0;font-size:1.05rem}
+.who span{color:var(--mute);font-size:.9rem;margin-left:6px}
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:100;display:grid;place-items:center;padding:20px;background:rgba(5,5,8,.92)}
+.center-row{justify-content:center}
+
+/* ================= Страницы и нижняя панель навигации ================= */
+.app{padding-bottom:120px}
+.page{display:grid;gap:16px;animation:rise .4s cubic-bezier(.2,.7,.2,1) backwards}
+.app>.bottom-nav{animation:none}
+.bottom-nav{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));margin:0 auto;width:min(520px,calc(100% - 24px));
+  z-index:60;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px;padding:7px;border-radius:24px;
+  background:rgba(18,18,24,.92);border:1px solid var(--line);
+  box-shadow:0 18px 40px rgba(0,0,0,.65),0 0 0 1px rgba(255,198,26,.07);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.nav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 6px 8px;border:0;border-radius:18px;background:transparent;
+  color:var(--mute);font:inherit;font-size:.72rem;font-weight:700;letter-spacing:.2px;cursor:pointer;
+  transition:background .2s,color .2s,transform .2s,box-shadow .2s}
+.nav-btn svg{transition:transform .2s}
+.nav-btn:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+.nav-btn.active{background:var(--gold-grad);color:#17120a;box-shadow:var(--glow)}
+.nav-btn.active svg{transform:scale(1.08)}
+@media (hover:hover){
+  .nav-btn:hover{color:var(--gold);transform:translateY(-2px)}
+  .nav-btn.active:hover{color:#17120a}
+}
+
+/* админ: просмотр чужих данных (только чтение) */
+.view-banner{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+  background:rgba(255,198,26,.12);border-color:var(--gold);color:var(--gold)}
+.view-banner b{color:#fff}
+.user-row{cursor:default;align-items:center}
+.user-row:hover{transform:none!important}
+.readonly #addObjectBtn,.readonly #menuBtn,.readonly #saveReportBtn,.readonly #clearBtn,.readonly #deleteReportBtn,
+.readonly #toggleEmpFormBtn,.readonly #empForm,.readonly .emp .btn,.readonly #editNameBtn,.readonly #importLocalBtn,.readonly #settings{display:none!important}

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Финансовый отчёт</title>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <section id="login" class="login" hidden>
@@ -17,8 +17,26 @@
   </div>
 </section>
 
+<section id="nameScreen" class="overlay" hidden>
+  <div class="card login-box">
+    <div class="logo center" aria-hidden="true">₽</div>
+    <h1>Как вас зовут?</h1>
+    <p class="sub">Имя будет показано в приложении</p>
+    <input type="text" id="nameInput" maxlength="40" placeholder="Ваше имя" autocomplete="given-name" aria-label="Ваше имя">
+    <div class="row center-row">
+      <button id="saveNameBtn" class="btn btn-primary">Продолжить</button>
+      <button id="cancelNameBtn" class="btn" hidden>Отмена</button>
+    </div>
+    <p id="nameErr" class="err"></p>
+  </div>
+</section>
+
 <main class="app" id="appMain" hidden>
   <div id="banner" class="banner" hidden></div>
+  <div id="viewBanner" class="banner view-banner" hidden>
+    <span>Просмотр: <b id="viewLabel"></b> — только чтение</span>
+    <button id="exitViewBtn" class="btn">К своим данным</button>
+  </div>
 
   <header class="top">
     <div class="brand">
@@ -26,6 +44,7 @@
       <div>
         <h1>Финансовый отчёт</h1>
         <p class="sub">Дневной финансовый отчёт</p>
+        <p class="greet" id="greeting"></p>
       </div>
     </div>
     <button id="addObjectBtn" class="btn btn-primary">+ Добавить объект</button>
@@ -54,12 +73,7 @@
     </div>
   </section>
 
-  <section class="dash">
-    <div class="card stat"><div class="label">Сегодня</div><div id="dashToday" class="big">0 ₽</div><div id="dashTodaySub" class="hint"></div></div>
-    <div class="card stat"><div class="label">Эта неделя</div><div id="dashWeek" class="big">0 ₽</div><div id="dashWeekSub" class="hint"></div></div>
-    <div class="card stat"><div class="label">Этот месяц</div><div id="dashMonth" class="big">0 ₽</div><div id="dashMonthSub" class="hint"></div></div>
-  </section>
-
+  <div class="page" id="page1">
   <section class="card">
     <div class="label">Дата отчёта</div>
     <div class="row">
@@ -122,6 +136,25 @@
     </div>
   </section>
 
+  <section class="card account">
+    <div class="label">Аккаунт</div>
+    <p class="who"><b id="userName"></b> <span id="userEmail"></span></p>
+    <div class="row">
+      <button id="editNameBtn" class="btn">Изменить имя</button>
+      <button id="exportBtn" class="btn">Скачать копию данных</button>
+      <button id="importLocalBtn" class="btn" hidden>Перенести данные из этого браузера</button>
+      <button id="logoutBtn" class="btn btn-danger">Выйти</button>
+    </div>
+  </section>
+  </div>
+
+  <div class="page" id="page2" hidden>
+  <section class="dash">
+    <div class="card stat"><div class="label">Сегодня</div><div id="dashToday" class="big">0 ₽</div><div id="dashTodaySub" class="hint"></div></div>
+    <div class="card stat"><div class="label">Эта неделя</div><div id="dashWeek" class="big">0 ₽</div><div id="dashWeekSub" class="hint"></div></div>
+    <div class="card stat"><div class="label">Этот месяц</div><div id="dashMonth" class="big">0 ₽</div><div id="dashMonthSub" class="hint"></div></div>
+  </section>
+
   <section class="card">
     <h2>Статистика</h2>
     <div class="tabs">
@@ -140,16 +173,48 @@
     <p class="hint" id="chartSub"></p>
     <canvas id="chart" height="220"></canvas>
   </section>
+  </div>
 
-  <section class="card account">
-    <div class="label">Аккаунт: <span id="userEmail"></span></div>
-    <div class="row">
-      <button id="exportBtn" class="btn">Скачать копию данных</button>
-      <button id="importLocalBtn" class="btn" hidden>Перенести данные из этого браузера</button>
-      <button id="logoutBtn" class="btn btn-danger">Выйти</button>
+  <div class="page" id="page3" hidden>
+  <section class="card">
+    <h2>Зарплаты</h2>
+    <div class="tabs">
+      <button id="salWeekBtn" class="btn active">Неделя</button>
+      <button id="salMonthBtn" class="btn">Месяц</button>
     </div>
+    <div id="salaryBody"></div>
   </section>
+  </div>
+
+  <div class="page" id="page4" hidden>
+    <section class="card">
+      <h2>Админ-панель</h2>
+      <p class="hint">Все пользователи и их объекты. Кнопка «Открыть» показывает данные пользователя в режиме только чтения.</p>
+      <div class="row"><button id="adminRefreshBtn" class="btn">Обновить список</button></div>
+      <h3>Пользователи</h3>
+      <div id="adminList" class="history"></div>
+    </section>
+  </div>
+
+  <nav class="bottom-nav" id="bottomNav" aria-label="Разделы">
+    <button class="nav-btn active" data-page="1" aria-label="Отчёт за день">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/><path d="M9.5 14l2 2 3.5-4"/></svg>
+      <span>День</span>
+    </button>
+    <button class="nav-btn" data-page="2" aria-label="Отчёты за неделю и месяц">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20v-9M12 20V4M19 20v-6"/></svg>
+      <span>Отчёты</span>
+    </button>
+    <button class="nav-btn" data-page="3" aria-label="Зарплаты">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2"/></svg>
+      <span>Зарплаты</span>
+    </button>
+    <button class="nav-btn" data-page="4" id="adminNavBtn" aria-label="Админ-панель" hidden>
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+      <span>Админ</span>
+    </button>
+  </nav>
 </main>
-<script type="module" src="app.js?v=7"></script>
+<script type="module" src="app.js?v=10"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 /* Финансовый отчёт — localStorage, без сервера. */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, collectionGroup, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 (function () {
 'use strict';
@@ -46,17 +46,20 @@ const firebaseConfig = {
   messagingSenderId: "122405068957",
   appId: "1:122405068957:web:afbfcfb805401b276c3474"
 };
+// Администраторы: видят данные всех пользователей (только чтение). Эта же почта указана в правилах Firestore.
+const ADMIN_EMAILS = ['trone124@gmail.com'];
 const KEY_OBJ = 'finance_objects', KEY_REP = 'finance_reports';   // старые ключи localStorage (только для переноса)
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 let db;
 try { db = initializeFirestore(fbApp, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
 catch (e) { db = getFirestore(fbApp); }
-let userId = null, objects = [], reports = {}, firstFromCache = false, unsubs = [];
+let viewUid = null, readOnly = false, isAdmin = false, profileEmail = '';
+let userId = null, userName = '', objects = [], reports = {}, firstFromCache = false, unsubs = [];
 const savedJson = {};
 const stable = v => JSON.stringify(v, (k, x) => x && typeof x === 'object' && !Array.isArray(x)
   ? Object.keys(x).sort().reduce((r, key) => (r[key] = x[key], r), {}) : x);
-const col = name => collection(db, 'users', userId, name);
+const col = name => collection(db, 'users', viewUid || userId, name);   // viewUid — админ смотрит данные другого пользователя
 const legacy = k => { try { const v = localStorage.getItem(k); return v === null ? null : JSON.parse(v); } catch (e) { return null; } };
 function showErr(e) {
   console.error(e);
@@ -73,15 +76,16 @@ let flushTimer = null;
 function saveObjects() { clearTimeout(flushTimer); flushTimer = setTimeout(flushObjects, 500); }   // с задержкой, чтобы не писать на каждую букву
 function flushObjects() {
   clearTimeout(flushTimer);
-  if (!userId) return;
+  if (!userId || readOnly) return;
   objects.forEach(o => {
     const j = stable(o);
     if (savedJson[o.id] !== j) { savedJson[o.id] = j; setDoc(doc(col('objects'), o.id), o).catch(showErr); }
   });
 }
-const cloudSetReport = (k, r) => setDoc(doc(col('reports'), k), r).catch(showErr);
-const cloudDeleteReport = k => deleteDoc(doc(col('reports'), k)).catch(showErr);
+const cloudSetReport = (k, r) => { if (!readOnly) setDoc(doc(col('reports'), k), r).catch(showErr); };
+const cloudDeleteReport = k => { if (!readOnly) deleteDoc(doc(col('reports'), k)).catch(showErr); };
 function cloudDeleteObject(id, keys) {
+  if (readOnly) return;
   delete savedJson[id];
   const ops = keys.map(k => ({ ref: doc(col('reports'), k) }));
   ops.push({ ref: doc(col('objects'), id) });
@@ -120,6 +124,33 @@ function applyReports(snap, first) {
   renderAll();
   $('deleteReportBtn').hidden = !reports[reportKey(state.objId, state.date)];
 }
+/* ---- Профиль: имя пользователя (хранится в облаке, показывается в шапке) ---- */
+function renderUser() {
+  $('greeting').textContent = userName ? 'Привет, ' + userName + '!' : '';
+  $('userName').textContent = userName;
+}
+function applyProfile(snap) {
+  if (viewUid) return;                                  // в режиме просмотра чужое имя не показываем
+  const d = snap.docs.find(x => x.id === 'main');
+  userName = (d && d.data().name) || '';
+  profileEmail = (d && d.data().email) || '';
+  renderUser();
+}
+function openNameScreen(canCancel) {
+  $('nameInput').value = userName || (auth.currentUser && auth.currentUser.displayName) || '';
+  $('nameErr').textContent = '';
+  $('cancelNameBtn').hidden = !canCancel;
+  $('nameScreen').hidden = false;
+  $('nameInput').focus();
+}
+function saveName() {
+  if (readOnly) return;
+  const name = $('nameInput').value.trim().slice(0, 40);
+  if (!name) { $('nameErr').textContent = 'Введите имя'; $('nameInput').focus(); return; }
+  userName = name; renderUser();
+  setDoc(doc(col('profile'), 'main'), { name, email: (auth.currentUser && auth.currentUser.email) || '' }).catch(showErr);
+  $('nameScreen').hidden = true;
+}
 async function migrateLocal() {                                    // перенос данных из localStorage этого браузера в облако
   const lo = legacy(KEY_OBJ) || [], lr = legacy(KEY_REP) || {}, ops = [], now = Date.now();
   const newObjs = lo.map((o, i) => ({ id: o.id, name: o.name, rentPrice: num(o.rentPrice), created: now + i,
@@ -146,7 +177,7 @@ async function firstRun() {                                        // облак
 }
 
 /* ================= State ================= */
-const state = { objId: null, date: todayIso(), snap: null, calY: 0, calM: 0, tab: 'week' };
+const state = { objId: null, date: todayIso(), snap: null, calY: 0, calM: 0, tab: 'week', stab: 'week' };
 const reportKey = (objId, date) => objId + '_' + date;
 const curObj = () => objects.find(o => o.id === state.objId) || null;
 
@@ -241,6 +272,7 @@ function renderEmps() {
     const name = el('input'); name.type = 'text'; name.value = emp.name; name.setAttribute('aria-label', 'Имя');
     const sal = el('input'); sal.type = 'number'; sal.min = 0; sal.value = emp.salary; sal.setAttribute('aria-label', 'Зарплата');
     const del = el('button', 'btn btn-danger', 'Удалить');
+    if (readOnly) { name.disabled = true; sal.disabled = true; }
     name.addEventListener('input', () => { emp.name = name.value; persistEmps(); });
     sal.addEventListener('input', () => {
       if (parseFloat(sal.value) < 0) sal.value = '';
@@ -417,6 +449,21 @@ function renderStats() {
     cell('Итог ' + unit, fmt(s.result), true, s.result < 0 ? 'neg-t' : s.result > 0 ? 'pos-t' : '')
   );
   body.appendChild(g);
+}
+
+/* ================= Страница 3: зарплаты (неделя / месяц) ================= */
+function renderSalaries() {
+  const body = $('salaryBody');
+  body.innerHTML = '';
+  $('salWeekBtn').classList.toggle('active', state.stab === 'week');
+  $('salMonthBtn').classList.toggle('active', state.stab === 'month');
+  let from, to, title;
+  if (state.stab === 'week') { const d = weekRange(state.date); from = d[0]; to = d[6]; title = 'Неделя ' + dmy(from) + ' – ' + dmy(to); }
+  else { const bnd = monthBounds(state.date), p = parseIso(state.date); from = bnd[0]; to = bnd[1]; title = MONTHS[p.m] + ' ' + p.y; }
+  const s = summarize(inRange(from, to));
+  const g = el('div', 'sgrid');
+  g.append(cell('Всего зарплат', fmt(s.salary), true, 'pos-t'));
+  body.append(el('p', 'hint', title), g);
   const emps = empList(s);
   const box = el('div', 'week');
   if (!emps.length) box.appendChild(el('div', 'empty', 'Нет данных за этот период'));
@@ -425,8 +472,7 @@ function renderStats() {
     row.append(el('span', '', x.name || 'Без имени'), el('b', '', x.days + ' дн. · ' + fmt(x.sum)));
     box.appendChild(row);
   });
-  if (emps.length) { const t = el('div'); t.append(el('span', '', 'Всего зарплат'), el('b', '', fmt(s.salary))); box.appendChild(t); }
-  body.append(el('h3', '', 'Зарплаты по сотрудникам'), box);
+  body.append(el('h3', '', 'По сотрудникам'), box);
 }
 
 /* ================= Текстовый отчёт (копируется в буфер обмена) ================= */
@@ -512,7 +558,22 @@ function renderChart() {
     if (bw >= 16 || i % 2 === 0) { x.fillStyle = '#9a9aa5'; x.fillText(String(i + 1), bx + ww / 2, h - 6); }
   });
 }
-function renderAll() { renderCalendar(); renderHistory(); renderStats(); renderDashboard(); renderChart(); }
+function renderAll() { renderCalendar(); renderHistory(); renderStats(); renderSalaries(); renderDashboard(); renderChart(); }
+
+/* ================= Страницы и нижняя панель ================= */
+function showPage(n) {
+  n = ([1, 2, 3].indexOf(n) >= 0 || (n === 4 && isAdmin)) ? n : 1;
+  [1, 2, 3, 4].forEach(i => { $('page' + i).hidden = i !== n; });
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    const on = Number(b.dataset.page) === n;
+    b.classList.toggle('active', on);
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  try { localStorage.setItem('finance_page', String(n)); } catch (e) {}
+  window.scrollTo(0, 0);
+  if (n === 2) renderChart();
+  if (n === 4) loadAdmin();                            // график рисуется только когда страница видна
+}
 
 /* ================= Events ================= */
 function bind() {
@@ -553,6 +614,9 @@ function bind() {
     const b = $(c[0]);
     if (b) b.addEventListener('click', () => copyReport(c[1](), c[2], b));
   });
+  $('salWeekBtn').addEventListener('click', () => { state.stab = 'week'; renderSalaries(); });
+  $('salMonthBtn').addEventListener('click', () => { state.stab = 'month'; renderSalaries(); });
+  document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => showPage(Number(b.dataset.page))));
   window.addEventListener('resize', renderChart);
 }
 
@@ -560,8 +624,63 @@ function startUI() {
   renderObjects();
   const p = parseIso(state.date); state.calY = p.y; state.calM = p.m;
   selectObject(objects.some(o => o.id === state.objId) ? state.objId : objects[0].id);
+  renderUser();
+  if (!userName && !viewUid) openNameScreen(false);               // первый вход: спросить имя
   const lo = legacy(KEY_OBJ);
   $('importLocalBtn').hidden = !(Array.isArray(lo) && lo.length) || localStorage.getItem('finance_migrated') === '1';
+}
+async function connect() {                                       // подписка на данные: свои или (для админа) выбранного пользователя
+  unsubs.forEach(u => u()); unsubs = [];
+  const own = !viewUid;
+  try { await Promise.all([listen('objects', applyObjects), listen('reports', applyReports), own ? Promise.resolve() : null, own ? listen('profile', applyProfile) : null].filter(Boolean)); }
+  catch (e) { showErr(e); return false; }
+  if (own && !objects.length && !(await firstRun())) return false;
+  if (!objects.length) return false;
+  startUI();
+  const mail = (auth.currentUser && auth.currentUser.email) || '';
+  if (own && userName && profileEmail !== mail) setDoc(doc(col('profile'), 'main'), { name: userName, email: mail }).catch(showErr);
+  return true;
+}
+function setReadonlyInputs(on) {
+  ['peopleInput', 'priceInput', 'cashInput', 'terminalInput', 'expenseInput'].forEach(id => { $(id).disabled = on; });
+}
+async function viewAs(uid, label) {                               // админ: открыть данные пользователя (только чтение)
+  flushObjects();
+  viewUid = uid; readOnly = true; objects = []; reports = {}; state.objId = null;
+  document.body.classList.add('readonly');
+  $('viewLabel').textContent = label; $('viewBanner').hidden = false;
+  if (!(await connect())) { alert('У этого пользователя пока нет объектов.'); await exitView(); return; }
+  setReadonlyInputs(true); renderEmps(); showPage(1);
+}
+async function exitView() {
+  viewUid = null; readOnly = false; objects = []; reports = {}; state.objId = null;
+  document.body.classList.remove('readonly'); $('viewBanner').hidden = true; setReadonlyInputs(false);
+  await connect(); showPage(4);
+}
+async function loadAdmin() {
+  const box = $('adminList');
+  box.innerHTML = ''; box.appendChild(el('div', 'empty', 'Загрузка…'));
+  try {
+    const q = await Promise.all(['profile', 'objects', 'reports'].map(n => getDocs(collectionGroup(db, n))));
+    const owner = d => d.ref.parent.parent.id, users = {};
+    const u = id => users[id] || (users[id] = { id, name: '', email: '', objs: [], reps: 0, last: '' });
+    q[0].docs.forEach(d => { const x = u(owner(d)), v = d.data(); x.name = v.name || ''; x.email = v.email || ''; });
+    q[1].docs.forEach(d => { u(owner(d)).objs.push(d.data().name); });
+    q[2].docs.forEach(d => { const x = u(owner(d)), v = d.data(); x.reps++; if ((v.date || '') > x.last) x.last = v.date; });
+    const list = Object.keys(users).map(k => users[k]).sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : 0));
+    box.innerHTML = '';
+    if (!list.length) { box.appendChild(el('div', 'empty', 'Пользователей пока нет')); return; }
+    list.forEach(x => {
+      const me = x.id === userId, title = x.name || ('Без имени · ' + x.id.slice(0, 6));
+      const row = el('div', 'hist user-row');
+      const left = el('span');
+      left.append(document.createTextNode(title + (me ? ' (вы)' : '')), el('small', '', x.email || 'почта неизвестна'),
+        el('small', '', 'Объекты: ' + (x.objs.length ? x.objs.join(', ') : 'нет') + ' · отчётов: ' + x.reps + (x.last ? ' · последний ' + dmy(x.last) : '')));
+      row.appendChild(left);
+      if (!me) { const b = el('button', 'btn btn-primary', 'Открыть'); b.addEventListener('click', () => viewAs(x.id, title + (x.email ? ' · ' + x.email : ''))); row.appendChild(b); }
+      box.appendChild(row);
+    });
+  } catch (e) { box.innerHTML = ''; showErr(e); }
 }
 function bindAccount() {
   $('loginBtn').addEventListener('click', async () => {
@@ -573,6 +692,15 @@ function bindAccount() {
       else if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') $('loginErr').textContent = 'Не удалось войти: ' + (e.code || e.message);
     }
   });
+  $('exitViewBtn').addEventListener('click', exitView);
+  $('adminRefreshBtn').addEventListener('click', loadAdmin);
+  $('saveNameBtn').addEventListener('click', saveName);
+  $('nameInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveName();
+    if (e.key === 'Escape' && !$('cancelNameBtn').hidden) $('nameScreen').hidden = true;
+  });
+  $('cancelNameBtn').addEventListener('click', () => { $('nameScreen').hidden = true; });
+  $('editNameBtn').addEventListener('click', () => openNameScreen(true));
   $('logoutBtn').addEventListener('click', () => { flushObjects(); signOut(auth); });
   $('exportBtn').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify({ objects, reports }, null, 2)], { type: 'application/json' });
@@ -588,18 +716,20 @@ function bindAccount() {
 }
 bind();
 bindAccount();
+showPage(Number(localStorage.getItem('finance_page')) || 1);
 onAuthStateChanged(auth, async user => {
   unsubs.forEach(u => u()); unsubs = [];
   if (!user) {
-    userId = null; objects = []; reports = {}; state.objId = null;
+    userId = null; userName = ''; objects = []; reports = {}; state.objId = null;
+    viewUid = null; readOnly = false; isAdmin = false; document.body.classList.remove('readonly'); $('viewBanner').hidden = true; setReadonlyInputs(false);
+    $('adminNavBtn').hidden = true; $('nameScreen').hidden = true; renderUser();
     $('login').hidden = false; $('appMain').hidden = true;
     return;
   }
   userId = user.uid;
   $('login').hidden = true; $('appMain').hidden = false; $('userEmail').textContent = user.email || '';
-  try { await Promise.all([listen('objects', applyObjects), listen('reports', applyReports)]); }
-  catch (e) { showErr(e); return; }
-  if (!objects.length && !(await firstRun())) return;
-  startUI();
+  isAdmin = ADMIN_EMAILS.indexOf((user.email || '').toLowerCase()) >= 0;
+  $('adminNavBtn').hidden = !isAdmin;
+  await connect();
 });
 })();

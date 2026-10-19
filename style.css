@@ -138,7 +138,7 @@ label input{font-size:1rem;font-weight:500;color:var(--text)}
 .week{display:grid;gap:7px;margin-bottom:14px}
 .week div{display:flex;justify-content:space-between;gap:10px;background:var(--field);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
 .week span{color:var(--mute)}
-canvas{width:100%;height:220px;display:block}
+canvas{width:100%;height:280px;display:block;touch-action:pan-y}
 
 /* вход, плашки, аккаунт */
 .login{min-height:100vh;display:grid;place-items:center;padding:20px}
@@ -263,3 +263,46 @@ input:hover,select:hover{border-color:#4a4a58}
 .user-row:hover{transform:none!important}
 .readonly #addObjectBtn,.readonly #menuBtn,.readonly #saveReportBtn,.readonly #clearBtn,.readonly #deleteReportBtn,
 .readonly #toggleEmpFormBtn,.readonly #empForm,.readonly .emp .btn,.readonly #editNameBtn,.readonly #importLocalBtn,.readonly #settings{display:none!important}
+
+.grid .wide-calc{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:space-between;border-style:solid;border-color:rgba(255,198,26,.3)}
+.grid .wide-calc b{font-size:1.4rem}
+.legend{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lg{display:inline-block;width:12px;height:12px;border-radius:3px;margin-left:6px}
+.lg.gold{background:var(--gold)}.lg.red{background:var(--neg)}
+.lg.dash{height:0;width:18px;border-radius:0;border-top:2px dashed var(--gold)}
+
+/* ================= Нижняя панель: плитки с объёмными иконками ================= */
+.app{padding-bottom:150px}
+.nav-defs{position:absolute;width:0;height:0;overflow:hidden}
+.bottom-nav{gap:8px;padding:8px;border-radius:30px;width:min(560px,calc(100% - 20px));
+  background:rgba(8,8,12,.84);border:1px solid rgba(255,255,255,.06)}
+.nav-btn{position:relative;gap:6px;padding:12px 4px 17px;border-radius:22px;min-height:82px;justify-content:center;
+  background:linear-gradient(180deg,rgba(34,34,44,.92),rgba(20,20,27,.92));border:1px solid rgba(255,255,255,.08);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);color:#d2d2e2;font-size:.78rem;font-weight:700}
+.nav-btn span{line-height:1}
+.nic{width:32px;height:32px;overflow:visible;filter:drop-shadow(0 3px 5px rgba(0,0,0,.5))}
+.nic .ic{fill:url(#gi)}
+.nic .ic2{fill:#8a8aa6;opacity:.8}
+.nic .ck{fill:none;stroke:#1b1405;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
+.nic .ck2{fill:#2a2a36}
+.nic .ck3{fill:none;stroke:#e2e2f0;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+.nav-btn.active{background:linear-gradient(160deg,#f9bd0a 0%,#c78a00 100%);border:1.5px solid #ffe433;color:#fff6da;
+  box-shadow:0 0 0 1px rgba(255,228,51,.35),0 0 24px rgba(255,196,0,.55),inset 0 0 18px rgba(255,226,120,.28)}
+.nav-btn.active::after{content:"";position:absolute;left:50%;bottom:7px;width:34%;height:4px;margin-left:-17%;border-radius:3px;
+  background:#ffee00;box-shadow:0 0 10px rgba(255,238,0,.85)}
+.nav-btn.active .nic .ic{fill:url(#gg)}
+.nav-btn.active .nic .ic2{fill:#e89a2b;opacity:1}
+.nav-btn.active .nic .ck2{fill:#6a4600}
+.nav-btn.active .nic .ck3{stroke:#2a2108}
+.nav-btn.active .nic{transform:none}
+@media (hover:hover){
+  .nav-btn:hover{color:#fff;transform:translateY(-3px);border-color:rgba(255,198,26,.6)}
+  .nav-btn.active:hover{color:#fff6da;border-color:#ffe433}
+}
+@media (max-width:420px){.nic{width:28px;height:28px}.nav-btn{min-height:76px;font-size:.72rem}}
+
+.legend{gap:16px;margin-bottom:0}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend .lg{margin-left:0}
+.nic{width:38px;height:38px}
+@media (max-width:420px){.nic{width:34px;height:34px}}

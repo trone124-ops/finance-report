@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Финансовый отчёт</title>
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 <section id="login" class="login" hidden>
@@ -86,13 +86,12 @@
     <h2>Итоги дня</h2>
     <div class="grid">
       <label>Количество людей<input type="number" id="peopleInput" min="0" step="1" inputmode="numeric" placeholder="0"></label>
-      <label>Цена за человека, ₽<input type="number" id="priceInput" min="0" inputmode="decimal" placeholder="0"></label>
       <div class="calc"><span>Сумма аренды</span><b id="rentTotal">0 ₽</b></div>
+      <label>Расходы, ₽<input type="number" id="expenseInput" min="0" inputmode="decimal" placeholder="0"></label>
       <label>Наличные, ₽<input type="number" id="cashInput" min="0" inputmode="decimal" placeholder="0"></label>
       <label>Терминал, ₽<input type="number" id="terminalInput" min="0" inputmode="decimal" placeholder="0"></label>
       <div class="calc"><span>Комиссия терминала 3%</span><b id="feeTotal">0 ₽</b></div>
-      <div class="calc"><span>Всего</span><b id="moneyTotal">0 ₽</b></div>
-      <label>Расходы, ₽<input type="number" id="expenseInput" min="0" inputmode="decimal" placeholder="0"></label>
+      <div class="calc wide-calc"><span>Всего</span><b id="moneyTotal">0 ₽</b></div>
     </div>
 
     <h3>Сотрудники и зарплаты</h3>
@@ -117,24 +116,6 @@
     </div>
   </section>
 
-  <section class="card">
-    <h2>История отчётов</h2>
-    <button id="toggleCalBtn" class="btn btn-primary">📅 Открыть календарь</button>
-    <div id="historyBox" hidden>
-      <div class="cal-head">
-        <button id="prevMonthBtn" class="btn icon" aria-label="Предыдущий месяц">‹</button>
-        <strong id="calTitle"></strong>
-        <button id="nextMonthBtn" class="btn icon" aria-label="Следующий месяц">›</button>
-      </div>
-      <div class="cal-grid cal-wd"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
-      <div id="calGrid" class="cal-grid"></div>
-      <p class="hint"><i class="dot"></i> — есть сохранённый отчёт</p>
-    </div>
-    <div id="savedBox">
-      <h3>Сохранённые отчёты</h3>
-      <div id="historyList" class="history"></div>
-    </div>
-  </section>
 
   <section class="card account">
     <div class="label">Аккаунт</div>
@@ -171,7 +152,28 @@
   <section class="card">
     <h2>Динамика результатов</h2>
     <p class="hint" id="chartSub"></p>
-    <canvas id="chart" height="220"></canvas>
+    <canvas id="chart" height="280" aria-label="График итога по дням"></canvas>
+    <p class="hint legend"><span><i class="lg gold"></i>плюс</span><span><i class="lg red"></i>минус</span><span><i class="lg dash"></i>среднее за день</span></p>
+    <p class="hint">Нажмите на столбик, чтобы увидеть данные дня.</p>
+  </section>
+
+  <section class="card">
+    <h2>История отчётов</h2>
+    <button id="toggleCalBtn" class="btn btn-primary">📅 Открыть календарь</button>
+    <div id="historyBox" hidden>
+      <div class="cal-head">
+        <button id="prevMonthBtn" class="btn icon" aria-label="Предыдущий месяц">‹</button>
+        <strong id="calTitle"></strong>
+        <button id="nextMonthBtn" class="btn icon" aria-label="Следующий месяц">›</button>
+      </div>
+      <div class="cal-grid cal-wd"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+      <div id="calGrid" class="cal-grid"></div>
+      <p class="hint"><i class="dot"></i> — есть сохранённый отчёт</p>
+    </div>
+    <div id="savedBox">
+      <h3>Сохранённые отчёты</h3>
+      <div id="historyList" class="history"></div>
+    </div>
   </section>
   </div>
 
@@ -197,24 +199,28 @@
   </div>
 
   <nav class="bottom-nav" id="bottomNav" aria-label="Разделы">
+    <svg class="nav-defs" width="0" height="0" aria-hidden="true" focusable="false"><defs>
+      <linearGradient id="gi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f4fc"/><stop offset="1" stop-color="#7a7a96"/></linearGradient>
+      <linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3cf"/><stop offset="1" stop-color="#ffb347"/></linearGradient>
+    </defs></svg>
     <button class="nav-btn active" data-page="1" aria-label="Отчёт за день">
-      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/><path d="M9.5 14l2 2 3.5-4"/></svg>
+      <svg class="nic" viewBox="0 0 24 24" aria-hidden="true"><path class="ic" d="M7 3h7.5L20 8.5V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path class="ck" d="M8.8 13.8l2.6 2.6 4.8-5.4"/></svg>
       <span>День</span>
     </button>
     <button class="nav-btn" data-page="2" aria-label="Отчёты за неделю и месяц">
-      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20v-9M12 20V4M19 20v-6"/></svg>
+      <svg class="nic" viewBox="0 0 24 24" aria-hidden="true"><rect class="ic" x="4" y="11" width="4" height="9" rx="2"/><rect class="ic" x="10" y="3.5" width="4" height="16.5" rx="2"/><rect class="ic" x="16" y="8.5" width="4" height="11.5" rx="2"/></svg>
       <span>Отчёты</span>
     </button>
     <button class="nav-btn" data-page="3" aria-label="Зарплаты">
-      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2"/></svg>
+      <svg class="nic" viewBox="0 0 24 24" aria-hidden="true"><rect class="ic2" x="5.5" y="3.8" width="13" height="5" rx="2"/><rect class="ic" x="3" y="6.5" width="18" height="13.5" rx="3.5"/><circle class="ck2" cx="16.8" cy="13.6" r="1.6"/></svg>
       <span>Зарплаты</span>
     </button>
     <button class="nav-btn" data-page="4" id="adminNavBtn" aria-label="Админ-панель" hidden>
-      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+      <svg class="nic" viewBox="0 0 24 24" aria-hidden="true"><path class="ic" d="M12 2.8l7.4 2.7v5.9c0 4.5-3 8-7.4 9.6-4.4-1.6-7.4-5.1-7.4-9.6V5.5z"/><path class="ck3" d="M8.6 12l2.5 2.5 4.4-4.7"/></svg>
       <span>Админ</span>
     </button>
   </nav>
 </main>
-<script type="module" src="app.js?v=10"></script>
+<script type="module" src="app.js?v=13"></script>
 </body>
 </html>

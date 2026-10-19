@@ -177,7 +177,7 @@ async function firstRun() {                                        // облак
 }
 
 /* ================= State ================= */
-const state = { objId: null, date: todayIso(), snap: null, calY: 0, calM: 0, tab: 'week', stab: 'week' };
+const state = { objId: null, date: todayIso(), snap: null, calY: 0, calM: 0, tab: 'week', stab: 'week', snapPrice: null };
 const reportKey = (objId, date) => objId + '_' + date;
 const curObj = () => objects.find(o => o.id === state.objId) || null;
 
@@ -197,7 +197,9 @@ function readForm() {
   const o = curObj();
   return {
     objectId: o.id, objectName: o.name, date: state.date,
-    people: num($('peopleInput').value), rentPrice: num($('priceInput').value),
+    people: num($('peopleInput').value),
+    rentPrice: state.snapPrice != null ? state.snapPrice : num(curObj().rentPrice),   // цена берётся из настроек объекта; в сохранённом отчёте — на день сохранения
+   
     cash: num($('cashInput').value), terminal: num($('terminalInput').value),
     expense: num($('expenseInput').value), employees: clone(getEmps())
   };
@@ -257,7 +259,6 @@ function saveSettings() {
   if (name) o.name = name;
   o.rentPrice = num($('setPrice').value);
   saveObjects(); renderObjects(); $('objectSelect').value = o.id;
-  if (!state.snap) $('priceInput').value = o.rentPrice || '';   // сохранённые отчёты цену не меняют
   renderCalc(); renderAll();
 }
 
@@ -301,7 +302,6 @@ function addEmployee() {
 /* ================= 4. Daily reports ================= */
 function fillForm(r) {
   $('peopleInput').value = r ? r.people : '';
-  $('priceInput').value = r ? r.rentPrice : (curObj().rentPrice || '');
   $('cashInput').value = r ? r.cash : '';
   $('terminalInput').value = r ? r.terminal : '';
   $('expenseInput').value = r ? r.expense : '';
@@ -309,6 +309,7 @@ function fillForm(r) {
 function loadDate() {                                   // открыть выбранный день выбранного объекта
   const r = reports[reportKey(state.objId, state.date)];
   state.snap = r ? clone(r.employees) : null;
+  state.snapPrice = r ? r.rentPrice : null;
   fillForm(r);
   $('dateInput').value = state.date;
   $('status').textContent = r ? 'Сохранённый отчёт за ' + dmy(state.date) : 'Новый отчёт';
@@ -322,6 +323,7 @@ function setDate(d) {
 }
 function openReport(d) {                               // клик по дню календаря или по записи истории
   setDate(d);
+  showPage(1);                                          // календарь и история теперь на странице «Отчёты»
   const c = $('reportCard');
   if (c && c.scrollIntoView) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -335,7 +337,7 @@ function saveReport() {
   $('status').textContent = 'Отчёт за ' + dmy(state.date) + ' сохранён';
 }
 function clearForm() {                                  // только несохранённая форма
-  state.snap = null; fillForm(null);
+  state.snap = null; state.snapPrice = null; fillForm(null);
   $('status').textContent = 'Новый отчёт (форма очищена)';
   renderEmps(); renderCalc();
 }
@@ -530,35 +532,117 @@ function renderDashboard() {
   set('dashWeek', 0, w.result, 'Дней с отчётами: ' + w.days);
   set('dashMonth', 0, m.result, 'Дней с отчётами: ' + m.days);
 }
-function renderChart() {
-  const c = $('chart'), dpr = window.devicePixelRatio || 1, w = c.clientWidth || 600, h = 220;
-  c.width = w * dpr; c.height = h * dpr;
-  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h);
-  const p = parseIso(state.date), n = new Date(p.y, p.m + 1, 0).getDate(), vals = [];
-  $('chartSub').textContent = MONTHS[p.m] + ' ' + p.y + ' · итог по дням';
-  for (let d = 1; d <= n; d++) { const r = reports[reportKey(state.objId, iso(p.y, p.m, d))]; vals.push(r ? calc(r).result : null); }
-  const nums = vals.filter(v => v !== null);
-  x.font = '12px sans-serif'; x.fillStyle = '#9a9aa5';
-  if (!nums.length) { x.textAlign = 'center'; x.fillText('Нет сохранённых отчётов за этот месяц', w / 2, h / 2); return; }
-  const max = Math.max(0, ...nums), min = Math.min(0, ...nums), range = (max - min) || 1;
-  const L = 56, B = 22, T = 12, ph = h - B - T, y = v => T + (max - v) / range * ph, bw = (w - L - 6) / n;
-  x.strokeStyle = '#2d2d35'; x.beginPath(); x.moveTo(L, y(0)); x.lineTo(w - 6, y(0)); x.stroke();
-  x.textAlign = 'right';
-  x.fillText(Math.round(max).toLocaleString('ru-RU'), L - 6, y(max) + 4);
-  if (min < 0) x.fillText(Math.round(min).toLocaleString('ru-RU'), L - 6, y(min) + 4);
-  x.fillText('0', L - 6, y(0) + 4);
-  x.textAlign = 'center';
-  vals.forEach((v, i) => {
-    const bx = L + i * bw + bw * 0.15, ww = bw * 0.7;
-    if (v !== null) {
-      x.fillStyle = v < 0 ? '#ff5a5f' : '#ffc61a';
-      const y0 = y(0), y1 = y(v);
-      x.fillRect(bx, Math.min(y0, y1), ww, Math.max(2, Math.abs(y1 - y0)));
-    }
-    if (bw >= 16 || i % 2 === 0) { x.fillStyle = '#9a9aa5'; x.fillText(String(i + 1), bx + ww / 2, h - 6); }
+/* ---- График «Динамика результатов»: итог по дням недели (пт–чт) или месяца ---- */
+let chartGeo = null, chartHover = -1;
+const compact = n => {                                   // 7750 → 7,8к
+  const a = Math.abs(n);
+  if (a < 1000) return String(Math.round(n));
+  return (n / 1000).toFixed(a >= 10000 ? 0 : 1).replace('.', ',').replace(',0', '') + 'к';
+};
+const niceStep = r => { const p = Math.pow(10, Math.floor(Math.log10(r))), f = r / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
+function chartModel() {
+  let dates, title;
+  if (state.tab === 'week') { dates = weekRange(state.date); title = 'Неделя ' + dmy(dates[0]) + ' – ' + dmy(dates[6]); }
+  else {
+    const p = parseIso(state.date), n = new Date(p.y, p.m + 1, 0).getDate();
+    dates = []; for (let d = 1; d <= n; d++) dates.push(iso(p.y, p.m, d));
+    title = MONTHS[p.m] + ' ' + p.y;
+  }
+  const days = dates.map(d => {
+    const r = reports[reportKey(state.objId, d)], q = parseIso(d), wd = (new Date(q.y, q.m, q.d).getDay() + 6) % 7;
+    return { date: d, day: q.d, mon: q.m + 1, wd: WD[wd], fri: wd === 4, r, res: r ? calc(r).result : null };
   });
+  return { days, title };
 }
-function renderAll() { renderCalendar(); renderHistory(); renderStats(); renderSalaries(); renderDashboard(); renderChart(); }
+function renderChart() {
+  const c = $('chart');
+  if (!c) return;
+  const dpr = window.devicePixelRatio || 1, w = c.clientWidth || 600, h = 280;
+  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h);
+  const m = chartModel(), days = m.days, data = days.filter(d => d.res !== null);
+  chartGeo = null;
+  const sum = summarize(data.map(d => d.r));
+  $('chartSub').textContent = data.length
+    ? m.title + ' · дней с отчётами: ' + data.length + ' · итого ' + fmt(sum.result) + ' · в среднем ' + fmt(sum.avg) + ' в день'
+    : m.title;
+  x.font = '12px system-ui,-apple-system,"Segoe UI",sans-serif'; x.textBaseline = 'middle';
+  if (!data.length) { x.fillStyle = '#9a9aa8'; x.textAlign = 'center'; x.fillText('За этот период нет сохранённых отчётов', w / 2, h / 2); return; }
+  const vals = data.map(d => d.res);
+  let max = Math.max(0, ...vals), min = Math.min(0, ...vals);
+  const step = niceStep((max - min || 1) / 4);
+  max = Math.ceil(max / step) * step; min = Math.floor(min / step) * step;
+  const L = 46, R = 8, T = 26, B = state.tab === 'week' ? 38 : 26, n = days.length, bw = (w - L - R) / n, ph = h - T - B;
+  const y = v => T + (max - v) / (max - min) * ph;
+  chartGeo = { L, bw, n, w };
+  // сетка и подписи по вертикали
+  x.textAlign = 'right';
+  for (let v = min; v <= max + 1e-9; v += step) {
+    const yy = y(v);
+    x.strokeStyle = v === 0 ? '#6a6a78' : 'rgba(255,255,255,.07)'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(L, yy); x.lineTo(w - R, yy); x.stroke();
+    x.fillStyle = '#9a9aa8'; x.fillText(compact(v), L - 6, yy);
+  }
+  // границы недель (пятница) в месячном графике
+  if (state.tab === 'month') days.forEach((d, i) => { if (d.fri && i > 0) { x.strokeStyle = 'rgba(255,198,26,.18)'; x.beginPath(); x.moveTo(L + i * bw, T); x.lineTo(L + i * bw, T + ph); x.stroke(); } });
+  const best = data.reduce((a, d) => d.res > a.res ? d : a, data[0]), worst = data.reduce((a, d) => d.res < a.res ? d : a, data[0]);
+  const y0 = y(0);
+  days.forEach((d, i) => {
+    const bx = L + i * bw + bw * 0.16, ww = Math.max(3, bw * 0.68), hov = i === chartHover;
+    if (d.res === null) { x.fillStyle = 'rgba(255,255,255,.12)'; x.fillRect(bx, y0 - 1, ww, 2); }
+    else {
+      const y1 = y(d.res), top = Math.min(y0, y1), hh = Math.max(2, Math.abs(y1 - y0));
+      const g = x.createLinearGradient(0, top, 0, top + hh);
+      if (d.res >= 0) { g.addColorStop(0, hov ? '#ffe680' : '#ffd84d'); g.addColorStop(1, '#ff9f0a'); }
+      else { g.addColorStop(0, '#ff4046'); g.addColorStop(1, hov ? '#ff9a9d' : '#ff6b6f'); }
+      x.fillStyle = g; x.beginPath();
+      if (x.roundRect) x.roundRect(bx, top, ww, hh, 4); else x.rect(bx, top, ww, hh);
+      x.fill();
+      if (hov) { x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.stroke(); }
+      const showAll = bw >= 34;                            // подписи значений: везде, если хватает места, иначе у лучшего и худшего дня
+      if (showAll || d === best || d === worst || hov) {
+        x.font = (d === best || d === worst ? 'bold ' : '') + '12px system-ui,-apple-system,"Segoe UI",sans-serif';
+        x.fillStyle = d === best ? '#3ddc84' : d === worst && d.res < 0 ? '#ff6b6f' : '#f6f6f8';
+        x.textAlign = 'center'; x.fillText(compact(d.res), bx + ww / 2, d.res >= 0 ? top - 9 : top + hh + 10);
+        x.font = '12px system-ui,-apple-system,"Segoe UI",sans-serif';
+      }
+    }
+    // подписи дат
+    x.textAlign = 'center'; x.fillStyle = d.fri ? '#ffc61a' : '#9a9aa8';
+    if (state.tab === 'week') {
+      x.fillText(d.wd, bx + ww / 2, h - 24); x.font = '11px system-ui,sans-serif';
+      x.fillText(pad(d.day) + '.' + pad(d.mon), bx + ww / 2, h - 10); x.font = '12px system-ui,-apple-system,"Segoe UI",sans-serif';
+    } else if (bw >= 18 || i % 2 === 0 || i === n - 1) x.fillText(String(d.day), bx + ww / 2, h - 11);
+  });
+  // линия среднего по дням с отчётами
+  const avg = data.reduce((a, d) => a + d.res, 0) / data.length;
+  x.setLineDash([6, 4]); x.strokeStyle = 'rgba(255,198,26,.85)'; x.lineWidth = 1.4;
+  x.beginPath(); x.moveTo(L, y(avg)); x.lineTo(w - R, y(avg)); x.stroke(); x.setLineDash([]);
+  const at = 'ср. ' + compact(avg), aw = x.measureText(at).width + 12, ay = y(avg);   // подпись среднего — на тёмной плашке справа, чтобы не сливалась со столбиками
+  x.fillStyle = 'rgba(14,14,18,.92)'; x.strokeStyle = 'rgba(255,198,26,.7)'; x.lineWidth = 1; x.beginPath();
+  if (x.roundRect) x.roundRect(w - R - aw - 2, ay - 10, aw, 20, 6); else x.rect(w - R - aw - 2, ay - 10, aw, 20);
+  x.fill(); x.stroke(); x.textAlign = 'center'; x.fillStyle = '#ffc61a'; x.fillText(at, w - R - aw / 2 - 2, ay);
+  // подсказка по выбранному дню
+  const hd = days[chartHover];
+  if (hd && hd.r) {
+    const cc = calc(hd.r), lines = [hd.wd + ', ' + dmy(hd.date), 'Итог: ' + fmt(cc.result), 'Касса: ' + fmt(cc.total) + ' · людей ' + hd.r.people];
+    x.font = '12px system-ui,-apple-system,"Segoe UI",sans-serif';
+    const tw = Math.max.apply(null, lines.map(t => x.measureText(t).width)) + 20, th = 62;
+    let tx = L + chartHover * bw + bw / 2 - tw / 2; tx = Math.max(4, Math.min(w - tw - 4, tx));
+    x.fillStyle = 'rgba(12,12,16,.96)'; x.strokeStyle = '#ffc61a'; x.lineWidth = 1;
+    x.beginPath(); if (x.roundRect) x.roundRect(tx, 2, tw, th, 8); else x.rect(tx, 2, tw, th); x.fill(); x.stroke();
+    x.textAlign = 'left'; x.fillStyle = '#9a9aa8'; x.fillText(lines[0], tx + 10, 15);
+    x.fillStyle = hd.res < 0 ? '#ff6b6f' : '#3ddc84'; x.font = 'bold 12px system-ui,-apple-system,"Segoe UI",sans-serif'; x.fillText(lines[1], tx + 10, 32);
+    x.font = '12px system-ui,-apple-system,"Segoe UI",sans-serif'; x.fillStyle = '#f6f6f8'; x.fillText(lines[2], tx + 10, 49);
+  }
+}
+function chartPointer(e) {
+  if (!chartGeo) return;
+  const r = $('chart').getBoundingClientRect(), i = Math.floor((e.clientX - r.left - chartGeo.L) / chartGeo.bw);
+  const k = i >= 0 && i < chartGeo.n ? i : -1;
+  if (k !== chartHover) { chartHover = k; renderChart(); }
+}
+function renderAll() { renderCalendar(); renderHistory(); renderStats(); renderSalaries(); renderDashboard(); chartHover = -1; renderChart(); }
 
 /* ================= Страницы и нижняя панель ================= */
 function showPage(n) {
@@ -577,7 +661,7 @@ function showPage(n) {
 
 /* ================= Events ================= */
 function bind() {
-  ['peopleInput','priceInput','cashInput','terminalInput','expenseInput'].forEach(id => {
+  ['peopleInput','cashInput','terminalInput','expenseInput'].forEach(id => {
     $(id).addEventListener('input', e => {
       if (parseFloat(e.target.value) < 0) e.target.value = '';
       renderCalc();
@@ -607,8 +691,8 @@ function bind() {
   });
   $('prevMonthBtn').addEventListener('click', () => shiftMonth(-1));
   $('nextMonthBtn').addEventListener('click', () => shiftMonth(1));
-  $('weekBtn').addEventListener('click', () => { state.tab = 'week'; renderStats(); });
-  $('monthBtn').addEventListener('click', () => { state.tab = 'month'; renderStats(); });
+  $('weekBtn').addEventListener('click', () => { state.tab = 'week'; chartHover = -1; renderStats(); renderChart(); });
+  $('monthBtn').addEventListener('click', () => { state.tab = 'month'; chartHover = -1; renderStats(); renderChart(); });
   // кнопки копирования: если в index.html их нет (старая версия), остальное приложение всё равно работает
   [['copyDayBtn', () => 'day', false], ['copyAllBtn', () => state.tab, false], ['copyObjBtn', () => state.tab, true]].forEach(c => {
     const b = $(c[0]);
@@ -617,6 +701,9 @@ function bind() {
   $('salWeekBtn').addEventListener('click', () => { state.stab = 'week'; renderSalaries(); });
   $('salMonthBtn').addEventListener('click', () => { state.stab = 'month'; renderSalaries(); });
   document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => showPage(Number(b.dataset.page))));
+  $('chart').addEventListener('pointermove', chartPointer);
+  $('chart').addEventListener('pointerdown', chartPointer);
+  $('chart').addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && chartHover !== -1) { chartHover = -1; renderChart(); } });
   window.addEventListener('resize', renderChart);
 }
 
@@ -642,7 +729,7 @@ async function connect() {                                       // подпис
   return true;
 }
 function setReadonlyInputs(on) {
-  ['peopleInput', 'priceInput', 'cashInput', 'terminalInput', 'expenseInput'].forEach(id => { $(id).disabled = on; });
+  ['peopleInput', 'cashInput', 'terminalInput', 'expenseInput'].forEach(id => { $(id).disabled = on; });
 }
 async function viewAs(uid, label) {                               // админ: открыть данные пользователя (только чтение)
   flushObjects();

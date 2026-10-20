@@ -566,7 +566,7 @@ function renderChart() {
   $('chartSub').textContent = data.length
     ? m.title + ' · дней с отчётами: ' + data.length + ' · итого ' + fmt(sum.result) + ' · в среднем ' + fmt(sum.avg) + ' в день'
     : m.title;
-  x.font = '12px system-ui,-apple-system,"Segoe UI",sans-serif'; x.textBaseline = 'middle';
+  x.font = '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif'; x.textBaseline = 'middle';
   if (!data.length) { x.fillStyle = '#9a9aa8'; x.textAlign = 'center'; x.fillText('За этот период нет сохранённых отчётов', w / 2, h / 2); return; }
   const vals = data.map(d => d.res);
   let max = Math.max(0, ...vals), min = Math.min(0, ...vals);
@@ -601,17 +601,17 @@ function renderChart() {
       if (hov) { x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.stroke(); }
       const showAll = bw >= 34;                            // подписи значений: везде, если хватает места, иначе у лучшего и худшего дня
       if (showAll || d === best || d === worst || hov) {
-        x.font = (d === best || d === worst ? 'bold ' : '') + '12px system-ui,-apple-system,"Segoe UI",sans-serif';
+        x.font = (d === best || d === worst ? 'bold ' : '') + '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif';
         x.fillStyle = d === best ? '#3ddc84' : d === worst && d.res < 0 ? '#ff6b6f' : '#f6f6f8';
         x.textAlign = 'center'; x.fillText(compact(d.res), bx + ww / 2, d.res >= 0 ? top - 9 : top + hh + 10);
-        x.font = '12px system-ui,-apple-system,"Segoe UI",sans-serif';
+        x.font = '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif';
       }
     }
     // подписи дат
     x.textAlign = 'center'; x.fillStyle = d.fri ? '#ffc61a' : '#9a9aa8';
     if (state.tab === 'week') {
       x.fillText(d.wd, bx + ww / 2, h - 24); x.font = '11px system-ui,sans-serif';
-      x.fillText(pad(d.day) + '.' + pad(d.mon), bx + ww / 2, h - 10); x.font = '12px system-ui,-apple-system,"Segoe UI",sans-serif';
+      x.fillText(pad(d.day) + '.' + pad(d.mon), bx + ww / 2, h - 10); x.font = '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif';
     } else if (bw >= 18 || i % 2 === 0 || i === n - 1) x.fillText(String(d.day), bx + ww / 2, h - 11);
   });
   // линия среднего по дням с отчётами
@@ -626,14 +626,14 @@ function renderChart() {
   const hd = days[chartHover];
   if (hd && hd.r) {
     const cc = calc(hd.r), lines = [hd.wd + ', ' + dmy(hd.date), 'Итог: ' + fmt(cc.result), 'Касса: ' + fmt(cc.total) + ' · людей ' + hd.r.people];
-    x.font = '12px system-ui,-apple-system,"Segoe UI",sans-serif';
+    x.font = '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif';
     const tw = Math.max.apply(null, lines.map(t => x.measureText(t).width)) + 20, th = 62;
     let tx = L + chartHover * bw + bw / 2 - tw / 2; tx = Math.max(4, Math.min(w - tw - 4, tx));
     x.fillStyle = 'rgba(12,12,16,.96)'; x.strokeStyle = '#ffc61a'; x.lineWidth = 1;
     x.beginPath(); if (x.roundRect) x.roundRect(tx, 2, tw, th, 8); else x.rect(tx, 2, tw, th); x.fill(); x.stroke();
     x.textAlign = 'left'; x.fillStyle = '#9a9aa8'; x.fillText(lines[0], tx + 10, 15);
-    x.fillStyle = hd.res < 0 ? '#ff6b6f' : '#3ddc84'; x.font = 'bold 12px system-ui,-apple-system,"Segoe UI",sans-serif'; x.fillText(lines[1], tx + 10, 32);
-    x.font = '12px system-ui,-apple-system,"Segoe UI",sans-serif'; x.fillStyle = '#f6f6f8'; x.fillText(lines[2], tx + 10, 49);
+    x.fillStyle = hd.res < 0 ? '#ff6b6f' : '#3ddc84'; x.font = 'bold 12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif'; x.fillText(lines[1], tx + 10, 32);
+    x.font = '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif'; x.fillStyle = '#f6f6f8'; x.fillText(lines[2], tx + 10, 49);
   }
 }
 function chartPointer(e) {
@@ -804,7 +804,9 @@ function bindAccount() {
 bind();
 bindAccount();
 showPage(Number(localStorage.getItem('finance_page')) || 1);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => renderChart());   // перерисовать график, когда загрузится шрифт
 onAuthStateChanged(auth, async user => {
+  $('boot').hidden = true;                              // приложение запустилось — убираем экран загрузки
   unsubs.forEach(u => u()); unsubs = [];
   if (!user) {
     userId = null; userName = ''; objects = []; reports = {}; state.objId = null;

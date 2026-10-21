@@ -182,14 +182,20 @@ const reportKey = (objId, date) => objId + '_' + date;
 const curObj = () => objects.find(o => o.id === state.objId) || null;
 
 /* ================= 5. Calculations ================= */
-const FEE_RATE = 0.03;                                  // комиссия терминала 3%
+const DEF_TERM_PCT = 3, DEF_GOODS_PCT = 0;              // проценты по умолчанию; у каждого объекта и у каждого отчёта свои
+const pct = v => Math.min(100, num(v));                 // процент: от 0 до 100
+const termPctOf = r => r.terminalPct != null ? r.terminalPct : DEF_TERM_PCT;    // в старых отчётах процентов нет: 3% и товар 0%
+const goodsPctOf = r => r.goodsPct != null ? r.goodsPct : DEF_GOODS_PCT;
+const objTermPct = o => o.terminalPct != null ? o.terminalPct : DEF_TERM_PCT;
+const objGoodsPct = o => o.goodsPct != null ? o.goodsPct : DEF_GOODS_PCT;
 const round10 = n => Math.sign(n) * Math.round(Math.abs(n) / 10) * 10 || 0;   // округление до десятков: 88987 → 88990, 77953 → 77950
 function calc(r) {
   const rent = r.people * r.rentPrice;
   const total = r.cash + r.terminal;
   const salary = r.employees.reduce((s, e) => s + num(e.salary), 0);
-  const fee = round10(r.terminal * FEE_RATE);
-  return { rent, total, salary, fee, expense: r.expense, result: round10(total - rent - r.expense - salary - fee) };
+  const fee = round10(r.terminal * termPctOf(r) / 100);   // комиссия терминала = % от суммы по терминалу
+  const goods = round10(total * goodsPctOf(r) / 100);     // товар = % от общей кассы (наличные + терминал)
+  return { rent, total, salary, fee, goods, expense: r.expense, result: round10(total - goods - rent - r.expense - salary - fee) };
 }
 const getEmps = () => state.snap || curObj().employees;     // сохранённый отчёт — снимок; новый — сотрудники объекта
 
@@ -201,15 +207,21 @@ function readForm() {
     rentPrice: state.snapPrice != null ? state.snapPrice : num(curObj().rentPrice),   // цена берётся из настроек объекта; в сохранённом отчёте — на день сохранения
    
     cash: num($('cashInput').value), terminal: num($('terminalInput').value),
-    expense: num($('expenseInput').value), employees: clone(getEmps())
+    expense: num($('expenseInput').value), employees: clone(getEmps()),
+    terminalPct: pct($('termPctInput').value), goodsPct: pct($('goodsPctInput').value)
   };
 }
 function renderCalc() {
-  const c = calc(readForm());
+  const f = readForm(), c = calc(f), minus = v => '−\u00a0' + fmt(v);
   $('rentTotal').textContent = fmt(c.rent);
+  $('priceView').textContent = String(Math.round(f.rentPrice * 100) / 100);
   $('moneyTotal').textContent = fmt(c.total);
-  $('salaryTotal').textContent = fmt(c.salary);
+  $('termShare').textContent = (c.total ? String(Math.round(f.terminal / c.total * 1000) / 10).replace('.', ',') : '0') + '%';
   $('feeTotal').textContent = fmt(c.fee);
+  $('goodsTotal').textContent = fmt(c.goods);
+  $('salaryTotal').textContent = fmt(c.salary);
+  $('bdTotal').textContent = fmt(c.total); $('bdGoods').textContent = minus(c.goods); $('bdRent').textContent = minus(c.rent);
+  $('bdFee').textContent = minus(c.fee); $('bdExpense').textContent = minus(c.expense); $('bdSalary').textContent = minus(c.salary);
   $('dayResult').textContent = fmt(c.result);
   $('resultCard').className = 'result ' + cls(c.result);
 }
@@ -227,13 +239,14 @@ function selectObject(id) {
   $('objectSelect').value = id;
   $('setName').value = o.name;
   $('setPrice').value = o.rentPrice;
+  $('setTermPct').value = objTermPct(o); $('setGoodsPct').value = objGoodsPct(o);
   const p = parseIso(state.date); state.calY = p.y; state.calM = p.m;
   loadDate();
 }
 function addObject() {
   const name = (prompt('Название нового объекта:') || '').trim();
   if (!name) return;
-  const o = { id: uid(), name, rentPrice: 0, employees: [], created: Date.now() };
+  const o = { id: uid(), name, rentPrice: 0, terminalPct: DEF_TERM_PCT, goodsPct: DEF_GOODS_PCT, employees: [], created: Date.now() };
   objects.push(o); saveObjects(); renderObjects(); selectObject(o.id);
   $('settings').hidden = false;
 }
@@ -258,6 +271,8 @@ function saveSettings() {
   const name = $('setName').value.trim();
   if (name) o.name = name;
   o.rentPrice = num($('setPrice').value);
+  o.terminalPct = pct($('setTermPct').value); o.goodsPct = pct($('setGoodsPct').value);
+  if (!state.snap) { $('termPctInput').value = o.terminalPct; $('goodsPctInput').value = o.goodsPct; }   // сохранённые отчёты свои проценты не меняют
   saveObjects(); renderObjects(); $('objectSelect').value = o.id;
   renderCalc(); renderAll();
 }
@@ -305,6 +320,8 @@ function fillForm(r) {
   $('cashInput').value = r ? r.cash : '';
   $('terminalInput').value = r ? r.terminal : '';
   $('expenseInput').value = r ? r.expense : '';
+  $('termPctInput').value = r ? termPctOf(r) : objTermPct(curObj());      // сохранённый отчёт — свои проценты; новый — проценты объекта
+  $('goodsPctInput').value = r ? goodsPctOf(r) : objGoodsPct(curObj());
 }
 function loadDate() {                                   // открыть выбранный день выбранного объекта
   const r = reports[reportKey(state.objId, state.date)];
@@ -329,7 +346,7 @@ function openReport(d) {                               // клик по дню �
 }
 function saveReport() {
   const r = readForm(), c = calc(r);
-  r.rentTotal = c.rent; r.fee = c.fee; r.totalCash = c.total; r.salaryTotal = c.salary; r.dailyResult = c.result;
+  r.rentTotal = c.rent; r.fee = c.fee; r.goods = c.goods; r.totalCash = c.total; r.salaryTotal = c.salary; r.dailyResult = c.result;
   r.savedAt = new Date().toISOString();
   reports[reportKey(r.objectId, r.date)] = r;
   cloudSetReport(reportKey(r.objectId, r.date), r);
@@ -390,10 +407,12 @@ function shiftMonth(delta) {
 
 /* ================= 8–9. Weekly / monthly statistics (из сохранённых дней) ================= */
 function summarize(list) {                              // list — дневные отчёты
-  const s = { days: list.length, people: 0, fee: 0, cash: 0, terminal: 0, total: 0, rent: 0, expense: 0, salary: 0, result: 0, best: null, worst: null, byEmp: {} };
+  const s = { days: list.length, people: 0, fee: 0, goods: 0, tp: {}, gp: {}, cash: 0, terminal: 0, total: 0, rent: 0, expense: 0, salary: 0, result: 0, best: null, worst: null, byEmp: {} };
   list.forEach(r => {
     const c = calc(r);
-    s.people += r.people; s.fee += c.fee; s.cash += r.cash; s.terminal += r.terminal; s.total += c.total; s.rent += c.rent;
+    s.people += r.people; s.fee += c.fee; s.goods += c.goods;
+    if (r.terminal > 0) s.tp[String(termPctOf(r))] = 1;     // какие проценты были в периоде (для подписи в тексте отчёта)
+    if (c.total > 0) s.gp[String(goodsPctOf(r))] = 1; s.cash += r.cash; s.terminal += r.terminal; s.total += c.total; s.rent += c.rent;
     s.expense += c.expense; s.salary += c.salary; s.result += c.result;
     r.employees.forEach(e => {                          // зарплата каждого сотрудника
       const sal = num(e.salary), k = e.id || e.name;
@@ -444,7 +463,7 @@ function renderStats() {
   g.append(
     cell('Дней с отчётами', String(s.days)), cell('Наличные', fmt(s.cash)),
     cell('Терминал', fmt(s.terminal)), cell('Всего', fmt(s.total)),
-    cell('Аренда', fmt(s.rent)), cell('Расходы', fmt(s.expense)), cell('Комиссия 3%', fmt(s.fee)),
+    cell('Аренда', fmt(s.rent)), cell('Расходы', fmt(s.expense)), cell('Комиссия терминала', fmt(s.fee)), cell('Товар', fmt(s.goods)),
     cell('Зарплаты', fmt(s.salary)), cell('Средний итог за день', fmt(s.avg)),
     cell('Лучший день', s.best ? dmy(s.best.date) + ' · ' + fmt(s.best.v) : '—'),
     cell('Худший день', s.worst ? dmy(s.worst.date) + ' · ' + fmt(s.worst.v) : '—'),
@@ -480,8 +499,11 @@ function renderSalaries() {
 /* ================= Текстовый отчёт (копируется в буфер обмена) ================= */
 const n2 = n => String(Math.round(n * 100) / 100);
 function blockText(name, s, withEmps) {
+  const pl = (set, amount, base) => { const k = Object.keys(set); return k.length === 1 ? k[0] : n2(base ? Math.round(amount / base * 1000) / 10 : 0); };
   const L = [name, 'Людей ' + n2(s.people), 'Аренда ' + n2(s.rent), 'Касса ' + n2(s.total), 'Нал ' + n2(s.cash),
-    'Тер ' + n2(s.terminal) + ' (3%=' + n2(s.fee) + ')', 'Зп ' + n2(s.salary), 'Расход ' + n2(s.expense), 'Остаток ' + n2(s.result)];
+    'Тер ' + n2(s.terminal) + ' (' + pl(s.tp, s.fee, s.terminal) + '%=' + n2(s.fee) + ')'];
+  if (s.goods > 0) L.push('Товар ' + n2(s.total) + ' (' + pl(s.gp, s.goods, s.total) + '%=' + n2(s.goods) + ')');
+  L.push('Зп ' + n2(s.salary), 'Расход ' + n2(s.expense), 'Остаток ' + n2(s.result));
   const emps = withEmps ? empList(s) : [];
   if (emps.length) {
     L.push('', 'Зп по сотрудникам:');
@@ -667,12 +689,18 @@ function bind() {
       renderCalc();
     });
   });
+  [['termPctInput', 'terminalPct'], ['goodsPctInput', 'goodsPct']].forEach(p => $(p[0]).addEventListener('input', e => {
+    if (parseFloat(e.target.value) < 0) e.target.value = '';
+    if (parseFloat(e.target.value) > 100) e.target.value = 100;
+    if (!state.snap && !readOnly) { curObj()[p[1]] = pct(e.target.value); saveObjects(); }   // у нового отчёта процент запоминается за объектом
+    renderCalc();
+  }));
   $('objectSelect').addEventListener('change', e => selectObject(e.target.value));
   $('addObjectBtn').addEventListener('click', addObject);
   $('menuBtn').addEventListener('click', e => { e.stopPropagation(); $('menu').hidden = !$('menu').hidden; });
   document.addEventListener('click', () => { $('menu').hidden = true; });
   $('renameBtn').addEventListener('click', renameObject);
-  $('settingsBtn').addEventListener('click', () => { $('setName').value = curObj().name; $('setPrice').value = curObj().rentPrice; $('settings').hidden = false; });
+  $('settingsBtn').addEventListener('click', () => { $('setName').value = curObj().name; $('setPrice').value = curObj().rentPrice; $('setTermPct').value = objTermPct(curObj()); $('setGoodsPct').value = objGoodsPct(curObj()); $('settings').hidden = false; });
   $('deleteObjectBtn').addEventListener('click', deleteObject);
   $('saveSettingsBtn').addEventListener('click', saveSettings);
   $('closeSettingsBtn').addEventListener('click', () => { $('settings').hidden = true; });
@@ -729,7 +757,7 @@ async function connect() {                                       // подпис
   return true;
 }
 function setReadonlyInputs(on) {
-  ['peopleInput', 'cashInput', 'terminalInput', 'expenseInput'].forEach(id => { $(id).disabled = on; });
+  ['peopleInput', 'cashInput', 'terminalInput', 'expenseInput', 'termPctInput', 'goodsPctInput'].forEach(id => { $(id).disabled = on; });
 }
 async function viewAs(uid, label) {                               // админ: открыть данные пользователя (только чтение)
   flushObjects();

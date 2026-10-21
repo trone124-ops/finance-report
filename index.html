@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
 <div id="boot" class="boot"><div class="spin"></div><p id="bootMsg">Загрузка…</p></div>
@@ -86,6 +86,8 @@
     <div id="settings" class="settings" hidden>
       <label>Название объекта<input type="text" id="setName"></label>
       <label>Цена за человека, ₽<input type="number" id="setPrice" min="0" inputmode="decimal"></label>
+      <label>Комиссия терминала, % (от суммы по терминалу)<input type="number" id="setTermPct" min="0" max="100" step="any" inputmode="decimal"></label>
+      <label>Товар, % (от общей кассы)<input type="number" id="setGoodsPct" min="0" max="100" step="any" inputmode="decimal"></label>
       <div class="row">
         <button id="saveSettingsBtn" class="btn btn-primary">Сохранить настройки</button>
         <button id="closeSettingsBtn" class="btn">Закрыть</button>
@@ -94,27 +96,66 @@
   </section>
 
   <div class="page" id="page1">
-  <section class="card">
-    <div class="label">Дата отчёта</div>
-    <div class="row">
-      <input type="date" id="dateInput" aria-label="Дата отчёта">
-      <span id="status" class="badge"></span>
+  <section class="card" id="reportCard">
+    <div class="card-head">
+      <div>
+        <h2>Показатели смены</h2>
+        <p class="sub2">Выберите дату и внесите данные</p>
+      </div>
+      <div class="head-right">
+        <span id="status" class="badge"></span>
+        <div class="datebox">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <input type="date" id="dateInput" aria-label="Дата отчёта">
+        </div>
+      </div>
+    </div>
+    <div class="tiles">
+      <label class="tile"><span class="tl">Количество людей</span>
+        <span class="tin"><input type="number" id="peopleInput" min="0" step="1" inputmode="numeric" placeholder="0"><em>чел.</em></span></label>
+      <div class="tile"><span class="tl">Аренда за человека</span>
+        <span class="tin"><b id="priceView">0</b><em>₽</em></span>
+        <span class="th">Цена на выбранном объекте</span></div>
+      <div class="tile gold"><span class="tl">Начислено за аренду</span>
+        <span class="tin"><b id="rentTotal">0 ₽</b></span></div>
     </div>
   </section>
 
-  <section class="card" id="reportCard">
-    <h2>Итоги дня</h2>
-    <div class="grid">
-      <label>Количество людей<input type="number" id="peopleInput" min="0" step="1" inputmode="numeric" placeholder="0"></label>
-      <div class="calc"><span>Сумма аренды</span><b id="rentTotal">0 ₽</b></div>
-      <label>Расходы, ₽<input type="number" id="expenseInput" min="0" inputmode="decimal" placeholder="0"></label>
-      <label>Наличные, ₽<input type="number" id="cashInput" min="0" inputmode="decimal" placeholder="0"></label>
-      <label>Терминал, ₽<input type="number" id="terminalInput" min="0" inputmode="decimal" placeholder="0"></label>
-      <div class="calc"><span>Комиссия терминала 3%</span><b id="feeTotal">0 ₽</b></div>
-      <div class="calc wide-calc"><span>Всего</span><b id="moneyTotal">0 ₽</b></div>
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Касса</h2>
+        <p class="sub2">Поступления за день по способу оплаты</p>
+      </div>
+      <div class="coin" aria-hidden="true">₽</div>
     </div>
+    <div class="tiles">
+      <label class="tile"><span class="tl"><i class="pd g"></i>Наличные</span>
+        <span class="tin"><input type="number" id="cashInput" min="0" inputmode="decimal" placeholder="0"><em>₽</em></span></label>
+      <label class="tile"><span class="tl"><i class="pd b"></i>Терминал</span>
+        <span class="tin"><input type="number" id="terminalInput" min="0" inputmode="decimal" placeholder="0"><em>₽</em></span></label>
+      <label class="tile"><span class="tl"><i class="pd r"></i>Расходы</span>
+        <span class="tin"><input type="number" id="expenseInput" min="0" inputmode="decimal" placeholder="0"><em>₽</em></span></label>
+    </div>
+    <div class="cstats">
+      <div class="cstat"><span>Общая касса</span><b id="moneyTotal">0 ₽</b></div>
+      <div class="cstat"><span>Доля терминала</span><b id="termShare">0%</b></div>
+      <div class="cstat"><span>Комиссия терминала
+        <input type="number" id="termPctInput" class="pct" min="0" max="100" step="any" inputmode="decimal" aria-label="Процент комиссии терминала">%</span>
+        <b id="feeTotal">0 ₽</b></div>
+      <div class="cstat"><span>Товар
+        <input type="number" id="goodsPctInput" class="pct" min="0" max="100" step="any" inputmode="decimal" aria-label="Процент товара от кассы">%</span>
+        <b id="goodsTotal">0 ₽</b></div>
+    </div>
+  </section>
 
-    <h3>Сотрудники и зарплаты</h3>
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Сотрудники</h2>
+        <p class="sub2">Зарплаты за смену</p>
+      </div>
+    </div>
     <div id="employeesList" class="emps"></div>
     <button id="toggleEmpFormBtn" class="btn">+ Добавить сотрудника</button>
     <div id="empForm" class="row emp-form" hidden>
@@ -123,7 +164,23 @@
       <button id="saveEmpBtn" class="btn btn-primary">Сохранить</button>
     </div>
     <div class="calc"><span>Всего зарплаты</span><b id="salaryTotal">0 ₽</b></div>
+  </section>
 
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Итог дня</h2>
+        <p class="sub2">Касса − товар − аренда − комиссия − расходы − зарплаты</p>
+      </div>
+    </div>
+    <div class="bd">
+      <div><span>Касса</span><b id="bdTotal">0 ₽</b></div>
+      <div><span>Товар</span><b id="bdGoods">0 ₽</b></div>
+      <div><span>Аренда</span><b id="bdRent">0 ₽</b></div>
+      <div><span>Комиссия терминала</span><b id="bdFee">0 ₽</b></div>
+      <div><span>Расходы</span><b id="bdExpense">0 ₽</b></div>
+      <div><span>Зарплаты</span><b id="bdSalary">0 ₽</b></div>
+    </div>
     <div id="resultCard" class="result zero">
       <span>Итог дня</span>
       <b id="dayResult">0 ₽</b>
@@ -135,7 +192,6 @@
       <button id="deleteReportBtn" class="btn btn-danger" hidden>Удалить отчёт</button>
     </div>
   </section>
-
 
   <section class="card account">
     <div class="label">Аккаунт</div>
@@ -241,6 +297,6 @@
     </button>
   </nav>
 </main>
-<script type="module" src="app.js?v=15"></script>
+<script type="module" src="app.js?v=17"></script>
 </body>
 </html>

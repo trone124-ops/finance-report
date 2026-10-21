@@ -269,3 +269,38 @@ canvas{width:100%;height:280px;display:block;touch-action:pan-y}
 .spin{width:40px;height:40px;margin:0 auto;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:var(--gold);animation:spin .9s linear infinite}
 .boot.bad .spin{display:none}.boot.bad p{color:var(--neg);background:rgba(251,111,118,.1);border:1px solid var(--neg);border-radius:14px;padding:14px 16px}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ================= Форма смены: аккуратные карточки ================= */
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+.card-head h2{margin:0}.card-head h2::before{display:none}
+.sub2{margin:4px 0 0;color:var(--mute);font-size:.88rem;font-weight:500;line-height:1.4;max-width:48ch}
+.head-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.datebox{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:14px;padding:0 8px 0 14px;transition:border-color .15s,box-shadow .15s}
+.datebox:focus-within{border-color:var(--gold);box-shadow:0 0 0 4px rgba(247,201,72,.16)}
+.datebox svg{width:18px;height:18px;stroke:var(--mute);flex:none}
+.datebox input,.datebox input:focus{border:0;background:transparent;box-shadow:none;padding:12px 6px;width:auto;font-size:.98rem}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.tile{display:flex;flex-direction:column;gap:12px;min-height:116px;padding:16px 18px;background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:18px;
+  color:var(--mute);font-size:.9rem;font-weight:600;letter-spacing:0;transition:border-color .2s,box-shadow .2s,background .2s}
+label.tile:focus-within{border-color:var(--gold);box-shadow:0 0 0 4px rgba(247,201,72,.12);background:rgba(247,201,72,.04)}
+.tl{display:flex;align-items:center;gap:8px;font-size:.9rem;font-weight:600;color:#cfcfda}
+.tin{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:auto}
+.tin input,.tin input:focus,.tin input:hover{border:0;background:transparent;padding:0;border-radius:0;box-shadow:none;min-width:0;width:100%;
+  font-size:2rem;font-weight:800;letter-spacing:-.03em;color:var(--text)}
+.tin b{font-size:2rem;font-weight:800;letter-spacing:-.03em;color:var(--text);line-height:1.5}
+.tin em{font-style:normal;color:var(--mute);font-size:.85rem;font-weight:600;flex:none}
+.th{font-size:.78rem;color:var(--mute);font-weight:500;margin-top:-4px}
+.tile.gold{background:var(--gold-grad);border-color:transparent;box-shadow:var(--glow),inset 0 1px 0 rgba(255,255,255,.5)}
+.tile.gold .tl{color:rgba(26,19,5,.72)}.tile.gold .tin b{color:var(--gold-ink)}
+.pd{display:inline-block;width:9px;height:9px;border-radius:50%;flex:none}
+.pd.g{background:#34d399;box-shadow:0 0 9px rgba(52,211,153,.7)}.pd.b{background:#6ea8fe;box-shadow:0 0 9px rgba(110,168,254,.7)}.pd.r{background:#fb6f76;box-shadow:0 0 9px rgba(251,111,118,.7)}
+.coin{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;font-weight:800;font-size:1.3rem;color:var(--gold);background:rgba(247,201,72,.1);border:1px solid rgba(247,201,72,.28)}
+.cstats{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:22px;padding-top:20px;border-top:1px solid var(--line)}
+.cstat{display:flex;flex-direction:column;gap:8px;color:var(--mute);font-size:.82rem;font-weight:600}
+.cstat span{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cstat b{font-size:1.4rem;font-weight:800;color:var(--text);letter-spacing:-.02em}
+.cstat input.pct{width:64px;padding:6px 8px;border-radius:10px;font-size:.92rem;text-align:center;font-weight:700}
+.bd{display:grid;margin:0 0 4px}
+.bd div{display:flex;justify-content:space-between;gap:12px;padding:10px 2px;border-bottom:1px dashed var(--line);color:var(--mute);font-weight:600;font-size:.94rem}
+.bd b{color:#dcdce6;font-variant-numeric:tabular-nums}.bd div:first-child b{color:var(--text)}
+@media (max-width:760px){.tiles{grid-template-columns:1fr}.cstats{grid-template-columns:repeat(2,1fr)}.tile{min-height:100px}}

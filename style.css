@@ -304,3 +304,63 @@ label.tile:focus-within{border-color:var(--gold);box-shadow:0 0 0 4px rgba(247,2
 .bd div{display:flex;justify-content:space-between;gap:12px;padding:10px 2px;border-bottom:1px dashed var(--line);color:var(--mute);font-weight:600;font-size:.94rem}
 .bd b{color:#dcdce6;font-variant-numeric:tabular-nums}.bd div:first-child b{color:var(--text)}
 @media (max-width:760px){.tiles{grid-template-columns:1fr}.cstats{grid-template-columns:repeat(2,1fr)}.tile{min-height:100px}}
+
+
+/* ===== Анимированные иконки и подтверждения ===== */
+/* Экран-подтверждение: золотой перелив по всему экрану и круг с галочкой */
+#fx{position:fixed;inset:0;z-index:95;pointer-events:none;visibility:hidden;overflow:hidden}
+#fx.go{visibility:visible}
+.fx-sweep{position:absolute;inset:0;opacity:0;transform:translateX(-110%);
+  background:linear-gradient(100deg,transparent 30%,rgba(255,214,90,.0) 38%,rgba(255,214,90,.30) 48%,rgba(255,255,255,.22) 52%,rgba(255,170,30,.22) 57%,transparent 68%)}
+.fx-sweep.b{background:linear-gradient(100deg,transparent 40%,rgba(255,240,170,.0) 45%,rgba(255,240,170,.20) 50%,transparent 58%)}
+#fx.go .fx-sweep{animation:fxSweep 1.15s cubic-bezier(.4,.1,.3,1) forwards}
+#fx.go .fx-sweep.b{animation-delay:.22s;animation-duration:1.05s}
+@keyframes fxSweep{0%{opacity:0;transform:translateX(-110%)}12%{opacity:1}88%{opacity:1}100%{opacity:0;transform:translateX(110%)}}
+.fx-badge{position:absolute;inset:0;margin:auto;width:124px;height:124px;display:grid;place-items:center;opacity:0}
+#fx.go .fx-badge{animation:fxBadge 1.9s cubic-bezier(.2,.9,.3,1) forwards}
+@keyframes fxBadge{0%{opacity:0;transform:scale(.25) rotate(-14deg)}16%{opacity:1;transform:scale(1.14) rotate(0)}27%{transform:scale(1)}76%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.82) translateY(-16px)}}
+.fx-disc{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 35% 28%,#fff6c4,#ffc61a 46%,#e39a00);
+  box-shadow:0 0 0 7px rgba(255,198,26,.16),0 0 64px rgba(255,190,20,.7),inset 0 2px 0 rgba(255,255,255,.65)}
+.fx-ring{position:absolute;inset:0;border-radius:50%;border:3px solid rgba(255,214,90,.95);opacity:0}
+#fx.go .fx-ring{animation:fxRing 1.05s .12s ease-out}
+#fx.go .fx-ring.r2{animation-delay:.38s}
+@keyframes fxRing{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(2.4)}}
+.fx-badge svg{position:relative;width:62%;height:62%;fill:none;stroke:#1a1305;stroke-width:5.5;stroke-linecap:round;stroke-linejoin:round}
+.fx-check{stroke-dasharray:44;stroke-dashoffset:44}
+#fx.go .fx-check{animation:fxCk .5s .3s ease-out forwards}
+@keyframes fxCk{to{stroke-dashoffset:0}}
+.fx-spark{position:absolute;left:calc(50% - 4px);top:calc(50% - 4px);width:8px;height:8px;border-radius:50%;background:#ffe27a;box-shadow:0 0 12px 2px rgba(255,200,40,.9);opacity:0}
+#fx.go .fx-spark{animation:fxSpark 1s .18s ease-out}
+@keyframes fxSpark{0%{opacity:0;transform:rotate(var(--a)) translateY(-52px) scale(.4)}30%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) translateY(-122px) scale(1)}}
+/* короткий вариант для «Скопировано» */
+#fx.copy .fx-sweep,#fx.copy .fx-spark,#fx.copy .fx-ring{display:none}
+#fx.copy .fx-badge{width:84px;height:84px}
+#fx.go.copy .fx-badge{animation-duration:1.3s}
+/* кнопка «Сохранить» и карточка итога переливаются */
+.btn-primary.flash{animation:btnGlow 1.1s ease-out}
+.btn-primary.flash::after{animation:btnSweep .9s ease-out}
+@keyframes btnSweep{from{left:-70%}to{left:130%}}
+@keyframes btnGlow{0%,100%{box-shadow:var(--glow),inset 0 1px 0 rgba(255,255,255,.5)}35%{box-shadow:0 0 0 6px rgba(255,214,90,.35),0 0 46px rgba(255,190,20,.95),inset 0 1px 0 rgba(255,255,255,.5)}}
+.result.flash{animation:resFlash 1.3s ease-out}
+@keyframes resFlash{0%{filter:none;transform:none}28%{filter:brightness(1.55) saturate(1.3);transform:scale(1.018)}100%{filter:none;transform:none}}
+/* иконки нижнего меню оживают, когда раздел выбран */
+@keyframes icPop{0%{transform:scale(.55) rotate(-12deg)}55%{transform:scale(1.24) rotate(5deg)}100%{transform:scale(1) rotate(0)}}
+.nav-btn.active .nic{animation:icPop .55s cubic-bezier(.2,1.2,.4,1)}
+@keyframes drawStroke{from{stroke-dashoffset:16}to{stroke-dashoffset:0}}
+.nav-btn.active .ck,.nav-btn.active .ck3{stroke-dasharray:16;animation:drawStroke .5s .2s ease-out backwards}
+@keyframes barGrow{from{transform:scaleY(.12)}to{transform:scaleY(1)}}
+.nav-btn.active[data-page="2"] .nic rect{transform-box:fill-box;transform-origin:50% 100%;animation:barGrow .65s cubic-bezier(.2,1.1,.4,1) backwards}
+.nav-btn.active[data-page="2"] .nic rect:nth-child(2){animation-delay:.08s}
+.nav-btn.active[data-page="2"] .nic rect:nth-child(3){animation-delay:.16s}
+@keyframes coinPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.9)}}
+.nav-btn.active[data-page="3"] .ck2{transform-box:fill-box;transform-origin:center;animation:coinPulse .7s .15s ease-in-out}
+/* логотип: блик раз в несколько секунд; монетка в «Кассе» мягко вращается; точки способов оплаты дышат */
+.logo{position:relative;overflow:hidden}
+.logo::after{content:"";position:absolute;top:-10%;bottom:-10%;left:-70%;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.7),transparent);transform:skewX(-20deg);animation:logoShine 5s ease-in-out 1.2s infinite}
+@keyframes logoShine{0%,60%{left:-70%}100%{left:140%}}
+.coin{animation:coinSpin 6s ease-in-out 1s infinite}
+@keyframes coinSpin{0%,72%,100%{transform:perspective(200px) rotateY(0)}90%{transform:perspective(200px) rotateY(360deg)}}
+.pd{animation:pdPulse 2.6s ease-in-out infinite}
+@keyframes pdPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
+/* если в системе отключена анимация — показываем галочку спокойно, без движения */
+@media (prefers-reduced-motion:reduce){#fx.go .fx-badge{opacity:1!important}#fx.go .fx-check{stroke-dashoffset:0!important}}

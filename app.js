@@ -352,6 +352,20 @@ function saveReport() {
   cloudSetReport(reportKey(r.objectId, r.date), r);
   loadDate();
   $('status').textContent = 'Отчёт за ' + dmy(state.date) + ' сохранён';
+  celebrate('save'); flash($('saveReportBtn')); flash($('resultCard'));
+}
+/* ---- Анимации-подтверждения: золотой перелив + галочка, которая появляется и исчезает ---- */
+function celebrate(kind) {
+  const fx = $('fx'); if (!fx) return;
+  fx.className = ''; void fx.offsetWidth;                  // перезапуск анимации, если нажали повторно
+  fx.className = 'go ' + (kind || 'save');
+  clearTimeout(celebrate.t); celebrate.t = setTimeout(() => { fx.className = ''; }, 2200);
+  try { if (navigator.vibrate) navigator.vibrate(kind === 'copy' ? 15 : [20, 40, 20]); } catch (e) {}
+}
+function flash(el) {
+  if (!el) return;
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 1400);
 }
 function clearForm() {                                  // только несохранённая форма
   state.snap = null; state.snapPrice = null; fillForm(null);
@@ -537,6 +551,7 @@ async function copyReport(kind, onlyCur, btn) {
     t.remove();
   }
   if (!ok) { prompt('Скопируйте текст отчёта:', text); return; }
+  celebrate('copy');
   const old = btn.textContent; btn.textContent = 'Скопировано ✓';
   setTimeout(() => { btn.textContent = old; }, 1500);
 }

@@ -360,7 +360,67 @@ function celebrate(kind) {
   fx.className = ''; void fx.offsetWidth;                  // перезапуск анимации, если нажали повторно
   fx.className = 'go ' + (kind || 'save');
   clearTimeout(celebrate.t); celebrate.t = setTimeout(() => { fx.className = ''; }, 2200);
-  try { if (navigator.vibrate) navigator.vibrate(kind === 'copy' ? 15 : [20, 40, 20]); } catch (e) {}
+  haptic(kind === 'copy' ? 60 : [70, 60, 110]);
+}
+/* Тактильный отклик. Android/Chrome — navigator.vibrate. iPhone (Safari) этот метод не поддерживает совсем,
+   поэтому там используется скрытый переключатель: iOS 17.4+ даёт при его нажатии лёгкий «тык». */
+function haptic(p) {
+  try { if (navigator.vibrate && navigator.vibrate(p || 12)) return; } catch (e) {}
+  try {
+    const l = $('hapt'); if (!l) return;
+    const n = Array.isArray(p) ? Math.ceil(p.length / 2) : 1;
+    l.click();
+    for (let i = 1; i < n; i++) setTimeout(() => l.click(), i * 110);
+  } catch (e) {}
+}
+/* Переключатель Неделя/Месяц: содержимое «влетает» со стороны, куда сдвинулась пилюля, график растёт заново */
+function swapAnim(el, dir) {
+  if (!el) return;
+  const items = [];
+  Array.from(el.children).forEach(c => { if (/\b(sgrid|week)\b/.test(c.className)) items.push.apply(items, c.children); else items.push(c); });
+  items.forEach(c => c.classList.remove('swin-l', 'swin-r'));
+  void el.offsetWidth;
+  items.forEach((c, i) => { c.style.setProperty('--d', Math.min(i, 14) * 38 + 'ms'); c.classList.add(dir > 0 ? 'swin-l' : 'swin-r'); });
+  clearTimeout(swapAnim.t); swapAnim.t = setTimeout(() => items.forEach(c => c.classList.remove('swin-l', 'swin-r')), 1200);
+}
+function switchPeriod(kind, val) {
+  const same = state[kind] === val, dir = val === 'month' ? 1 : -1;
+  state[kind] = val;
+  if (kind === 'tab') { chartHover = -1; renderStats(); if (same) renderChart(); else { animateChart(); swapAnim($('statsBody'), dir); } }
+  else { renderSalaries(); if (!same) swapAnim($('salaryBody'), dir); }
+  if (!same) haptic(35);
+}
+let chartP = 1, chartRaf = 0;                         // прогресс роста столбиков (0..1)
+function animateChart() {
+  cancelAnimationFrame(chartRaf);
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) { chartP = 1; renderChart(); return; }
+  const t0 = performance.now(), dur = 750;
+  const tick = now => {
+    const k = Math.min(1, (now - t0) / dur);
+    chartP = k; renderChart();
+    if (k < 1) chartRaf = requestAnimationFrame(tick); else chartP = 1;
+  };
+  chartP = 0; renderChart(); chartRaf = requestAnimationFrame(tick);
+}
+/* Проверка вибрации: показывает, что поддерживает именно этот телефон и браузер */
+function hapticDiag() {
+  const ua = navigator.userAgent || '';
+  const ios = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const has = typeof navigator.vibrate === 'function';
+  const out = ['Устройство: ' + (ios ? 'iPhone / iPad' : /Android/.test(ua) ? 'Android' : 'компьютер или другое')];
+  out.push('Вибрация в браузере: ' + (has ? 'поддерживается' : 'не поддерживается'));
+  if (has) {
+    let ok = false;
+    try { ok = navigator.vibrate([250, 120, 250]); } catch (e) {}
+    out.push('Запуск вибрации: ' + (ok ? 'принят, телефон должен дважды вздрогнуть' : 'браузер отклонил'));
+  } else {
+    let done = false;
+    try { const l = $('hapt'); if (l) { l.click(); setTimeout(() => l.click(), 150); setTimeout(() => l.click(), 300); done = true; } } catch (e) {}
+    out.push(done ? 'Отправлено три «тыка» через переключатель (работает в Safari на iOS 17.4 и новее)' : 'Запасной способ недоступен');
+    if (ios) out.push('На iPhone вибрация работает только в Safari; в Chrome и во встроенных браузерах мессенджеров её нет.');
+  }
+  if (has) out.push('Если телефон не вздрогнул: проверьте беззвучный режим, экономию заряда и «Вибрация при касании» в настройках телефона.');
+  const box = $('hapticInfo'); box.hidden = false; box.textContent = out.join('\n');
 }
 function flash(el) {
   if (!el) return;
@@ -453,6 +513,7 @@ function renderStats() {
   body.innerHTML = '';
   $('weekBtn').classList.toggle('active', state.tab === 'week');
   $('monthBtn').classList.toggle('active', state.tab === 'month');
+  $('weekBtn').parentNode.classList.toggle('is-month', state.tab === 'month');
   let list, title;
   if (state.tab === 'week') {
     const days = weekRange(state.date);
@@ -492,6 +553,7 @@ function renderSalaries() {
   body.innerHTML = '';
   $('salWeekBtn').classList.toggle('active', state.stab === 'week');
   $('salMonthBtn').classList.toggle('active', state.stab === 'month');
+  $('salWeekBtn').parentNode.classList.toggle('is-month', state.stab === 'month');
   let from, to, title;
   if (state.stab === 'week') { const d = weekRange(state.date); from = d[0]; to = d[6]; title = 'Неделя ' + dmy(from) + ' – ' + dmy(to); }
   else { const bnd = monthBounds(state.date), p = parseIso(state.date); from = bnd[0]; to = bnd[1]; title = MONTHS[p.m] + ' ' + p.y; }
@@ -628,7 +690,8 @@ function renderChart() {
     const bx = L + i * bw + bw * 0.16, ww = Math.max(3, bw * 0.68), hov = i === chartHover;
     if (d.res === null) { x.fillStyle = 'rgba(255,255,255,.12)'; x.fillRect(bx, y0 - 1, ww, 2); }
     else {
-      const y1 = y(d.res), top = Math.min(y0, y1), hh = Math.max(2, Math.abs(y1 - y0));
+      const pi = Math.max(0, Math.min(1, chartP * 1.7 - i / n * 0.7)), ez = 1 - Math.pow(1 - pi, 3);   // каждый столбик растёт со своей задержкой
+      const y1 = y0 + (y(d.res) - y0) * ez, top = Math.min(y0, y1), hh = Math.max(2, Math.abs(y1 - y0));
       const g = x.createLinearGradient(0, top, 0, top + hh);
       if (d.res >= 0) { g.addColorStop(0, hov ? '#ffe680' : '#ffd84d'); g.addColorStop(1, '#ff9f0a'); }
       else { g.addColorStop(0, '#ff4046'); g.addColorStop(1, hov ? '#ff9a9d' : '#ff6b6f'); }
@@ -640,7 +703,7 @@ function renderChart() {
       if (showAll || d === best || d === worst || hov) {
         x.font = (d === best || d === worst ? 'bold ' : '') + '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif';
         x.fillStyle = d === best ? '#3ddc84' : d === worst && d.res < 0 ? '#ff6b6f' : '#f6f6f8';
-        x.textAlign = 'center'; x.fillText(compact(d.res), bx + ww / 2, d.res >= 0 ? top - 9 : top + hh + 10);
+        x.globalAlpha = ez; x.textAlign = 'center'; x.fillText(compact(d.res), bx + ww / 2, d.res >= 0 ? top - 9 : top + hh + 10); x.globalAlpha = 1;
         x.font = '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif';
       }
     }
@@ -692,7 +755,7 @@ function showPage(n) {
   });
   try { localStorage.setItem('finance_page', String(n)); } catch (e) {}
   window.scrollTo(0, 0);
-  if (n === 2) renderChart();
+  if (n === 2) animateChart();
   if (n === 4) loadAdmin();                            // график рисуется только когда страница видна
 }
 
@@ -734,16 +797,17 @@ function bind() {
   });
   $('prevMonthBtn').addEventListener('click', () => shiftMonth(-1));
   $('nextMonthBtn').addEventListener('click', () => shiftMonth(1));
-  $('weekBtn').addEventListener('click', () => { state.tab = 'week'; chartHover = -1; renderStats(); renderChart(); });
-  $('monthBtn').addEventListener('click', () => { state.tab = 'month'; chartHover = -1; renderStats(); renderChart(); });
+  $('hapticTestBtn').addEventListener('click', hapticDiag);
+  $('weekBtn').addEventListener('click', () => switchPeriod('tab', 'week'));
+  $('monthBtn').addEventListener('click', () => switchPeriod('tab', 'month'));
   // кнопки копирования: если в index.html их нет (старая версия), остальное приложение всё равно работает
   [['copyDayBtn', () => 'day', false], ['copyAllBtn', () => state.tab, false], ['copyObjBtn', () => state.tab, true]].forEach(c => {
     const b = $(c[0]);
     if (b) b.addEventListener('click', () => copyReport(c[1](), c[2], b));
   });
-  $('salWeekBtn').addEventListener('click', () => { state.stab = 'week'; renderSalaries(); });
-  $('salMonthBtn').addEventListener('click', () => { state.stab = 'month'; renderSalaries(); });
-  document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => showPage(Number(b.dataset.page))));
+  $('salWeekBtn').addEventListener('click', () => switchPeriod('stab', 'week'));
+  $('salMonthBtn').addEventListener('click', () => switchPeriod('stab', 'month'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => { haptic(30); showPage(Number(b.dataset.page)); }));
   $('chart').addEventListener('pointermove', chartPointer);
   $('chart').addEventListener('pointerdown', chartPointer);
   $('chart').addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && chartHover !== -1) { chartHover = -1; renderChart(); } });

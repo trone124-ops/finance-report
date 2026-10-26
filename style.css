@@ -364,3 +364,45 @@ label.tile:focus-within{border-color:var(--gold);box-shadow:0 0 0 4px rgba(247,2
 @keyframes pdPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
 /* если в системе отключена анимация — показываем галочку спокойно, без движения */
 @media (prefers-reduced-motion:reduce){#fx.go .fx-badge{opacity:1!important}#fx.go .fx-check{stroke-dashoffset:0!important}}
+
+
+/* ===== Переключатель Неделя/Месяц: золотая пилюля скользит с пружинным эффектом ===== */
+.tabs{position:relative;isolation:isolate}
+.tabs::before{content:"";position:absolute;z-index:-1;top:4px;bottom:4px;left:4px;width:calc(50% - 6px);border-radius:12px;
+  background:var(--gold-grad);box-shadow:var(--glow);transition:transform .6s cubic-bezier(.34,1.56,.64,1)}
+.tabs.is-month::before{transform:translateX(calc(100% + 4px))}
+.tabs .btn{position:relative;min-width:118px;transition:color .3s}
+.tabs .btn.active,.tabs .btn.active:hover{background:transparent;box-shadow:none;color:var(--gold-ink)}
+/* содержимое влетает со стороны движения пилюли, элементы — каскадом */
+@keyframes swinL{from{opacity:0;transform:translateX(38px) scale(.96);filter:blur(5px)}to{opacity:1;transform:none;filter:blur(0)}}
+@keyframes swinR{from{opacity:0;transform:translateX(-38px) scale(.96);filter:blur(5px)}to{opacity:1;transform:none;filter:blur(0)}}
+.swin-l{animation:swinL .55s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0ms)}
+.swin-r{animation:swinR .55s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0ms)}
+/* скрытый переключатель для тактильного отклика на iPhone */
+.hapt{position:fixed;left:-40px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none}
+/* компактная карточка «Показатели смены» */
+.card.compact{padding:14px 16px}
+.compact .card-head{margin-bottom:12px;gap:10px}
+.compact .card-head h2{font-size:1.05rem}
+.compact .sub2{font-size:.8rem;margin-top:2px}
+.compact .datebox input{padding:8px 6px;font-size:.9rem}
+.compact .tiles{gap:10px}
+.compact .tile{min-height:0;padding:10px 14px;gap:4px;border-radius:15px}
+.compact .tl{font-size:.8rem}
+.compact .tin input,.compact .tin b{font-size:1.45rem}
+.compact .th{font-size:.7rem}
+@media (max-width:760px){
+  .compact .tiles{grid-template-columns:repeat(3,1fr);gap:8px}
+  .compact .tile{padding:9px 10px;border-radius:14px}
+  .compact .tl{font-size:.68rem;line-height:1.15}
+  .compact .tin{gap:4px}
+  .compact .tin input,.compact .tin b{font-size:1.15rem}
+  .compact .tin em{font-size:.7rem}
+  .compact .th{display:none}
+}
+@media (max-width:760px){.compact .tile.gold .tin b{font-size:1rem;white-space:nowrap}}
+@media (max-width:380px){.compact .tile.gold .tin b{font-size:.9rem}}
+.tin input::-webkit-outer-spin-button,.tin input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.tin input[type=number]{-moz-appearance:textfield;appearance:textfield}
+
+.hapt-info{white-space:pre-line;margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:rgba(0,0,0,.3);line-height:1.5}

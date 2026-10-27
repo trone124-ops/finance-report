@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
 <div id="boot" class="boot"><div class="spin"></div><p id="bootMsg">Загрузка…</p></div>
@@ -88,6 +88,7 @@
       <label>Цена за человека, ₽<input type="number" id="setPrice" min="0" inputmode="decimal"></label>
       <label>Комиссия терминала, % (от суммы по терминалу)<input type="number" id="setTermPct" min="0" max="100" step="any" inputmode="decimal"></label>
       <label>Товар, % (от общей кассы)<input type="number" id="setGoodsPct" min="0" max="100" step="any" inputmode="decimal"></label>
+      <label>Статьи расходов (через запятую)<input type="text" id="setCats" placeholder="Бензин, Расходники, Ремонт"></label>
       <div class="row">
         <button id="saveSettingsBtn" class="btn btn-primary">Сохранить настройки</button>
         <button id="closeSettingsBtn" class="btn">Закрыть</button>
@@ -134,8 +135,13 @@
         <span class="tin"><input type="number" id="cashInput" min="0" inputmode="decimal" placeholder="0"><em>₽</em></span></label>
       <label class="tile"><span class="tl"><i class="pd b"></i>Терминал</span>
         <span class="tin"><input type="number" id="terminalInput" min="0" inputmode="decimal" placeholder="0"><em>₽</em></span></label>
-      <label class="tile"><span class="tl"><i class="pd r"></i>Расходы</span>
+      <label class="tile"><span class="tl"><i class="pd r"></i>Прочие расходы</span>
         <span class="tin"><input type="number" id="expenseInput" min="0" inputmode="decimal" placeholder="0"><em>₽</em></span></label>
+    </div>
+    <div class="exp-box">
+      <div class="exp-head"><div><b>Расходы по статьям</b><small>Всего расходов: <span id="expTotal">0 ₽</span></small></div><button id="addExpBtn" class="btn">+ Статья</button></div>
+      <div id="expList"></div>
+      <datalist id="catList"></datalist>
     </div>
     <div class="cstats">
       <div class="cstat"><span>Общая касса</span><b id="moneyTotal">0 ₽</b></div>
@@ -153,17 +159,19 @@
     <div class="card-head">
       <div>
         <h2>Сотрудники</h2>
-        <p class="sub2">Зарплаты за смену</p>
+        <p class="sub2">Зарплата за смену. Поле «Премия / штраф ±» (минус — штраф) действует только на этот день</p>
       </div>
     </div>
     <div id="employeesList" class="emps"></div>
     <button id="toggleEmpFormBtn" class="btn">+ Добавить сотрудника</button>
     <div id="empForm" class="row emp-form" hidden>
       <input type="text" id="empNameInput" placeholder="Имя сотрудника" aria-label="Имя сотрудника">
-      <input type="number" id="empSalaryInput" min="0" inputmode="decimal" placeholder="Зарплата, ₽" aria-label="Зарплата">
+      <select id="empModeInput" aria-label="Вид зарплаты"><option value="fix">₽ в день</option><option value="pct">% от кассы</option></select>
+      <input type="number" id="empSalaryInput" min="0" step="any" inputmode="decimal" placeholder="Зарплата, ₽" aria-label="Зарплата">
       <button id="saveEmpBtn" class="btn btn-primary">Сохранить</button>
     </div>
     <div class="calc"><span>Всего зарплаты</span><b id="salaryTotal">0 ₽</b></div>
+    <div class="calc" id="bonusRow" hidden><span>в том числе премии / штрафы</span><b id="bonusTotal">0 ₽</b></div>
   </section>
 
   <section class="card">
@@ -208,12 +216,6 @@
   </div>
 
   <div class="page" id="page2" hidden>
-  <section class="dash">
-    <div class="card stat"><div class="label">Сегодня</div><div id="dashToday" class="big">0 ₽</div><div id="dashTodaySub" class="hint"></div></div>
-    <div class="card stat"><div class="label">Эта неделя</div><div id="dashWeek" class="big">0 ₽</div><div id="dashWeekSub" class="hint"></div></div>
-    <div class="card stat"><div class="label">Этот месяц</div><div id="dashMonth" class="big">0 ₽</div><div id="dashMonthSub" class="hint"></div></div>
-  </section>
-
   <section class="card">
     <h2>Статистика</h2>
     <div class="tabs">
@@ -225,14 +227,6 @@
       <button id="copyObjBtn" class="btn">Скопировать (только этот объект)</button>
     </div>
     <div id="statsBody"></div>
-  </section>
-
-  <section class="card">
-    <h2>Динамика результатов</h2>
-    <p class="hint" id="chartSub"></p>
-    <canvas id="chart" height="280" aria-label="График итога по дням"></canvas>
-    <p class="hint legend"><span><i class="lg gold"></i>плюс</span><span><i class="lg red"></i>минус</span><span><i class="lg dash"></i>среднее за день</span></p>
-    <p class="hint">Нажмите на столбик, чтобы увидеть данные дня.</p>
   </section>
 
   <section class="card">
@@ -251,6 +245,56 @@
     <div id="savedBox">
       <h3>Сохранённые отчёты</h3>
       <div id="historyList" class="history"></div>
+    </div>
+  </section>
+  </div>
+
+  <div class="page" id="page5" hidden>
+  <section class="card">
+    <div class="card-head">
+      <div><h2>Аналитика</h2><p class="sub2" id="anSub">Сравнение периодов, план, структура расходов</p></div>
+      <label class="switch"><input type="checkbox" id="anAllChk"><i></i><span>Все объекты</span></label>
+    </div>
+    <div class="tabs">
+      <button id="anWeekBtn" class="btn active">Неделя</button>
+      <button id="anMonthBtn" class="btn">Месяц</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div><h2>Сравнение периодов</h2><p class="sub2" id="cmpSub"></p></div></div>
+    <div id="cmpBody"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div><h2>План выручки</h2><p class="sub2">Выручка — общая касса. План задаётся для выбранного объекта</p></div></div>
+    <div class="plan-inputs">
+      <label>На день, ₽<input type="number" id="planDay" min="0" step="any" inputmode="decimal" placeholder="0"></label>
+      <label>На неделю, ₽<input type="number" id="planWeek" min="0" step="any" inputmode="decimal" placeholder="0"></label>
+      <label>На месяц, ₽<input type="number" id="planMonth" min="0" step="any" inputmode="decimal" placeholder="0"></label>
+    </div>
+    <div id="planBody"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div><h2>Средний чек и эффективность</h2><p class="sub2" id="effSub"></p></div></div>
+    <div id="effBody"></div>
+    <h3 class="sub-h">Какие дни недели приносят больше</h3>
+    <p class="hint" id="wdSub"></p>
+    <div id="wdBody"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div><h2>Куда уходит выручка</h2><p class="sub2" id="pieSub"></p></div></div>
+    <div id="pieBody"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div><h2>Выгрузка за месяц</h2><p class="sub2">Для налоговой и бухгалтера: все объекты, по дням и итоги</p></div></div>
+    <label class="month-pick">Месяц<input type="month" id="expMonth"></label>
+    <div class="row">
+      <button id="xlsxBtn" class="btn btn-primary">Скачать Excel (.xlsx)</button>
+      <button id="pdfBtn" class="btn">PDF (печать)</button>
     </div>
   </section>
   </div>
@@ -289,6 +333,10 @@
       <svg class="nic" viewBox="0 0 24 24" aria-hidden="true"><rect class="ic" x="4" y="11" width="4" height="9" rx="2"/><rect class="ic" x="10" y="3.5" width="4" height="16.5" rx="2"/><rect class="ic" x="16" y="8.5" width="4" height="11.5" rx="2"/></svg>
       <span>Отчёты</span>
     </button>
+    <button class="nav-btn" data-page="5" aria-label="Аналитика">
+      <svg class="nic" viewBox="0 0 24 24" aria-hidden="true"><path class="ic" d="M11 3.2a9 9 0 1 0 9.8 9.8H11z"/><path class="ic2" d="M13.2 2.6a9 9 0 0 1 8.2 8.2h-8.2z"/></svg>
+      <span>Аналитика</span>
+    </button>
     <button class="nav-btn" data-page="3" aria-label="Зарплаты">
       <svg class="nic" viewBox="0 0 24 24" aria-hidden="true"><rect class="ic2" x="5.5" y="3.8" width="13" height="5" rx="2"/><rect class="ic" x="3" y="6.5" width="18" height="13.5" rx="3.5"/><circle class="ck2" cx="16.8" cy="13.6" r="1.6"/></svg>
       <span>Зарплаты</span>
@@ -299,8 +347,9 @@
     </button>
   </nav>
 </main>
+<div id="printArea" aria-hidden="true"></div>
 <label id="hapt" class="hapt" aria-hidden="true"><input type="checkbox" switch tabindex="-1"></label>
 <div id="fx" aria-hidden="true"><div class="fx-sweep"></div><div class="fx-sweep b"></div><div class="fx-badge"><i class="fx-ring"></i><i class="fx-ring r2"></i><span class="fx-disc"></span><i class="fx-spark" style="--a:0deg"></i><i class="fx-spark" style="--a:45deg"></i><i class="fx-spark" style="--a:90deg"></i><i class="fx-spark" style="--a:135deg"></i><i class="fx-spark" style="--a:180deg"></i><i class="fx-spark" style="--a:225deg"></i><i class="fx-spark" style="--a:270deg"></i><i class="fx-spark" style="--a:315deg"></i><svg viewBox="0 0 52 52"><path class="fx-check" d="M14 27l8 8 16-17"/></svg></div></div>
-<script type="module" src="app.js?v=20"></script>
+<script type="module" src="app.js?v=21"></script>
 </body>
 </html>

@@ -177,7 +177,7 @@ async function firstRun() {                                        // облак
 }
 
 /* ================= State ================= */
-const state = { objId: null, date: todayIso(), snap: null, calY: 0, calM: 0, tab: 'week', stab: 'week', snapPrice: null };
+const state = { objId: null, date: todayIso(), snap: null, calY: 0, calM: 0, tab: 'week', stab: 'week', snapPrice: null, exp: [], bonus: {}, an: 'week', anAll: false };
 const reportKey = (objId, date) => objId + '_' + date;
 const curObj = () => objects.find(o => o.id === state.objId) || null;
 
@@ -189,13 +189,21 @@ const goodsPctOf = r => r.goodsPct != null ? r.goodsPct : DEF_GOODS_PCT;
 const objTermPct = o => o.terminalPct != null ? o.terminalPct : DEF_TERM_PCT;
 const objGoodsPct = o => o.goodsPct != null ? o.goodsPct : DEF_GOODS_PCT;
 const round10 = n => Math.sign(n) * Math.round(Math.abs(n) / 10) * 10 || 0;   // округление до десятков: 88987 → 88990, 77953 → 77950
+const snum = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };   // число со знаком (штраф бывает отрицательным)
+const DEF_CATS = ['Бензин', 'Расходники', 'Ремонт'];       // статьи расходов по умолчанию; у каждого объекта свой список
+const objCats = o => Array.isArray(o.expenseCats) ? o.expenseCats : DEF_CATS;
+const expItems = r => Array.isArray(r.expenseItems) ? r.expenseItems : [];
+// оплата сотрудника за день: фиксированная сумма или % от общей кассы, плюс премия / минус штраф
+const empPay = (e, total) => (e.mode === 'pct' ? round10(total * num(e.pct) / 100) : num(e.salary)) + snum(e.bonus);
 function calc(r) {
   const rent = r.people * r.rentPrice;
   const total = r.cash + r.terminal;
-  const salary = r.employees.reduce((s, e) => s + num(e.salary), 0);
+  const salary = r.employees.reduce((s, e) => s + empPay(e, total), 0);
+  const bonus = r.employees.reduce((s, e) => s + snum(e.bonus), 0);
+  const expense = num(r.expense) + expItems(r).reduce((s, x) => s + num(x.sum), 0);   // «прочие» + расходы по статьям
   const fee = round10(r.terminal * termPctOf(r) / 100);   // комиссия терминала = % от суммы по терминалу
   const goods = round10(total * goodsPctOf(r) / 100);     // товар = % от общей кассы (наличные + терминал)
-  return { rent, total, salary, fee, goods, expense: r.expense, result: round10(total - goods - rent - r.expense - salary - fee) };
+  return { rent, total, salary, bonus, fee, goods, expense, other: num(r.expense), result: round10(total - goods - rent - expense - salary - fee) };
 }
 const getEmps = () => state.snap || curObj().employees;     // сохранённый отчёт — снимок; новый — сотрудники объекта
 
@@ -207,7 +215,9 @@ function readForm() {
     rentPrice: state.snapPrice != null ? state.snapPrice : num(curObj().rentPrice),   // цена берётся из настроек объекта; в сохранённом отчёте — на день сохранения
    
     cash: num($('cashInput').value), terminal: num($('terminalInput').value),
-    expense: num($('expenseInput').value), employees: clone(getEmps()),
+    expense: num($('expenseInput').value),
+    expenseItems: state.exp.filter(x => num(x.sum) > 0).map(x => ({ name: String(x.name || '').trim(), sum: num(x.sum) })),
+    employees: clone(getEmps()).map(e => { e.bonus = state.snap ? snum(e.bonus) : snum(state.bonus[e.id]); return e; }),
     terminalPct: pct($('termPctInput').value), goodsPct: pct($('goodsPctInput').value)
   };
 }
@@ -220,6 +230,9 @@ function renderCalc() {
   $('feeTotal').textContent = fmt(c.fee);
   $('goodsTotal').textContent = fmt(c.goods);
   $('salaryTotal').textContent = fmt(c.salary);
+  $('expTotal').textContent = fmt(c.expense);
+  $('bonusRow').hidden = !c.bonus; $('bonusTotal').textContent = (c.bonus > 0 ? '+ ' : '− ') + fmt(Math.abs(c.bonus));
+  f.employees.forEach(e => { const a = $('empAmt-' + e.id); if (a) a.textContent = '= ' + fmt(empPay(e, c.total) - snum(e.bonus)); });
   $('bdTotal').textContent = fmt(c.total); $('bdGoods').textContent = minus(c.goods); $('bdRent').textContent = minus(c.rent);
   $('bdFee').textContent = minus(c.fee); $('bdExpense').textContent = minus(c.expense); $('bdSalary').textContent = minus(c.salary);
   $('dayResult').textContent = fmt(c.result);
@@ -239,7 +252,7 @@ function selectObject(id) {
   $('objectSelect').value = id;
   $('setName').value = o.name;
   $('setPrice').value = o.rentPrice;
-  $('setTermPct').value = objTermPct(o); $('setGoodsPct').value = objGoodsPct(o);
+  $('setTermPct').value = objTermPct(o); $('setGoodsPct').value = objGoodsPct(o); $('setCats').value = objCats(o).join(', ');
   const p = parseIso(state.date); state.calY = p.y; state.calM = p.m;
   loadDate();
 }
@@ -272,9 +285,10 @@ function saveSettings() {
   if (name) o.name = name;
   o.rentPrice = num($('setPrice').value);
   o.terminalPct = pct($('setTermPct').value); o.goodsPct = pct($('setGoodsPct').value);
+  const seen = {}; o.expenseCats = $('setCats').value.split(/[,;\n]/).map(x => x.trim()).filter(x => x && !seen[x.toLowerCase()] && (seen[x.toLowerCase()] = 1));
   if (!state.snap) { $('termPctInput').value = o.terminalPct; $('goodsPctInput').value = o.goodsPct; }   // сохранённые отчёты свои проценты не меняют
   saveObjects(); renderObjects(); $('objectSelect').value = o.id;
-  renderCalc(); renderAll();
+  renderExp(); renderCalc(); renderAll();
 }
 
 /* ================= 3. Employees ================= */
@@ -286,28 +300,69 @@ function renderEmps() {
   list.forEach(emp => {
     const row = el('div', 'emp');
     const name = el('input'); name.type = 'text'; name.value = emp.name; name.setAttribute('aria-label', 'Имя');
-    const sal = el('input'); sal.type = 'number'; sal.min = 0; sal.value = emp.salary; sal.setAttribute('aria-label', 'Зарплата');
+    const pay = el('div', 'emp-pay');
+    const sal = el('input'); sal.type = 'number'; sal.min = 0; sal.step = 'any'; sal.setAttribute('aria-label', 'Зарплата');
+    const mode = el('select'); mode.setAttribute('aria-label', 'Вид зарплаты');
+    [['fix', '₽ в день'], ['pct', '% от кассы']].forEach(m => { const o = el('option', '', m[1]); o.value = m[0]; mode.appendChild(o); });
+    mode.value = emp.mode === 'pct' ? 'pct' : 'fix';
+    sal.value = emp.mode === 'pct' ? (emp.pct || '') : emp.salary;
+    const amt = el('span', 'emp-amt', ''); amt.id = 'empAmt-' + emp.id;
+    amt.hidden = emp.mode !== 'pct';
+    const bonus = el('input'); bonus.type = 'number'; bonus.step = 'any'; bonus.placeholder = 'Премия / штраф ±'; bonus.setAttribute('aria-label', 'Премия или штраф за день');
+    bonus.value = (state.snap ? emp.bonus : state.bonus[emp.id]) || '';
     const del = el('button', 'btn btn-danger', 'Удалить');
-    if (readOnly) { name.disabled = true; sal.disabled = true; }
+    if (readOnly) { name.disabled = true; sal.disabled = true; mode.disabled = true; bonus.disabled = true; }
     name.addEventListener('input', () => { emp.name = name.value; persistEmps(); });
     sal.addEventListener('input', () => {
       if (parseFloat(sal.value) < 0) sal.value = '';
-      emp.salary = num(sal.value); persistEmps(); renderCalc();
+      if (emp.mode === 'pct') { emp.pct = pct(sal.value); if (parseFloat(sal.value) > 100) sal.value = 100; } else emp.salary = num(sal.value);
+      persistEmps(); renderCalc();
+    });
+    mode.addEventListener('change', () => {
+      emp.mode = mode.value; if (emp.mode === 'pct' && emp.pct == null) emp.pct = 0;
+      persistEmps(); renderEmps(); renderCalc();
+    });
+    bonus.addEventListener('input', () => {
+      if (state.snap) emp.bonus = snum(bonus.value); else state.bonus[emp.id] = snum(bonus.value);   // премия/штраф относится только к этому дню
+      renderCalc();
     });
     del.addEventListener('click', () => {
       if (!confirm('Удалить сотрудника «' + (emp.name || 'без имени') + '»?')) return;
       const arr = getEmps(); arr.splice(arr.indexOf(emp), 1);
       persistEmps(); renderEmps(); renderCalc();
     });
-    row.append(name, sal, del);
+    pay.append(sal, mode, amt);
+    row.append(name, pay, bonus, del);
     box.appendChild(row);
   });
+}
+function renderExp() {
+  const box = $('expList'); box.innerHTML = '';
+  const dl = $('catList'); dl.innerHTML = '';
+  objCats(curObj()).forEach(c => { const o = el('option'); o.value = c; dl.appendChild(o); });
+  if (!state.exp.length) box.appendChild(el('div', 'empty', 'Статей пока нет — добавьте бензин, расходники и т. п.'));
+  state.exp.forEach(x => {
+    const row = el('div', 'exp');
+    const name = el('input'); name.type = 'text'; name.setAttribute('list', 'catList'); name.placeholder = 'Статья (например, бензин)'; name.value = x.name || ''; name.setAttribute('aria-label', 'Статья расходов');
+    const sum = el('input'); sum.type = 'number'; sum.min = 0; sum.step = 'any'; sum.placeholder = 'Сумма'; sum.value = x.sum || ''; sum.setAttribute('aria-label', 'Сумма расхода');
+    const del = el('button', 'btn btn-danger icon', '✕'); del.setAttribute('aria-label', 'Удалить статью');
+    if (readOnly) { name.disabled = true; sum.disabled = true; }
+    name.addEventListener('input', () => { x.name = name.value; });
+    sum.addEventListener('input', () => { if (parseFloat(sum.value) < 0) sum.value = ''; x.sum = num(sum.value); renderCalc(); });
+    del.addEventListener('click', () => { state.exp.splice(state.exp.indexOf(x), 1); renderExp(); renderCalc(); });
+    row.append(name, sum, del); box.appendChild(row);
+  });
+}
+function addExp() {
+  state.exp.push({ id: uid(), name: '', sum: '' }); renderExp();
+  const ins = $('expList').querySelectorAll('.exp'); const last = ins[ins.length - 1]; if (last) last.querySelector('input').focus();
 }
 function persistEmps() { if (!state.snap) saveObjects(); }      // снимок отчёта живёт только до «Сохранить отчёт»
 function addEmployee() {
   const name = $('empNameInput').value.trim();
   if (!name) { $('empNameInput').focus(); return; }
-  getEmps().push({ id: uid(), name, salary: num($('empSalaryInput').value) });
+  const pc = $('empModeInput').value === 'pct', v = $('empSalaryInput').value;
+  getEmps().push(pc ? { id: uid(), name, salary: 0, mode: 'pct', pct: pct(v) } : { id: uid(), name, salary: num(v) });
   persistEmps();
   $('empNameInput').value = ''; $('empSalaryInput').value = '';
   $('empForm').hidden = true;
@@ -327,11 +382,12 @@ function loadDate() {                                   // открыть выб
   const r = reports[reportKey(state.objId, state.date)];
   state.snap = r ? clone(r.employees) : null;
   state.snapPrice = r ? r.rentPrice : null;
+  state.exp = r ? clone(expItems(r)) : []; state.bonus = {};
   fillForm(r);
   $('dateInput').value = state.date;
   $('status').textContent = r ? 'Сохранённый отчёт за ' + dmy(state.date) : 'Новый отчёт';
   $('deleteReportBtn').hidden = !r;
-  renderEmps(); renderCalc(); renderAll();
+  renderEmps(); renderExp(); renderCalc(); renderAll();
 }
 function setDate(d) {
   state.date = d;
@@ -350,6 +406,9 @@ function saveReport() {
   r.savedAt = new Date().toISOString();
   reports[reportKey(r.objectId, r.date)] = r;
   cloudSetReport(reportKey(r.objectId, r.date), r);
+  const ob = curObj(), cats = objCats(ob).slice();
+  r.expenseItems.forEach(x => { if (x.name && !cats.some(c => c.toLowerCase() === x.name.toLowerCase())) cats.push(x.name); });   // новая статья попадает в список подсказок
+  if (cats.length !== objCats(ob).length) { ob.expenseCats = cats; saveObjects(); }
   loadDate();
   $('status').textContent = 'Отчёт за ' + dmy(state.date) + ' сохранён';
   celebrate('save'); flash($('saveReportBtn')); flash($('resultCard'));
@@ -386,21 +445,9 @@ function swapAnim(el, dir) {
 function switchPeriod(kind, val) {
   const same = state[kind] === val, dir = val === 'month' ? 1 : -1;
   state[kind] = val;
-  if (kind === 'tab') { chartHover = -1; renderStats(); if (same) renderChart(); else { animateChart(); swapAnim($('statsBody'), dir); } }
+  if (kind === 'tab') { renderStats(); if (!same) swapAnim($('statsBody'), dir); }
   else { renderSalaries(); if (!same) swapAnim($('salaryBody'), dir); }
   if (!same) haptic(35);
-}
-let chartP = 1, chartRaf = 0;                         // прогресс роста столбиков (0..1)
-function animateChart() {
-  cancelAnimationFrame(chartRaf);
-  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) { chartP = 1; renderChart(); return; }
-  const t0 = performance.now(), dur = 750;
-  const tick = now => {
-    const k = Math.min(1, (now - t0) / dur);
-    chartP = k; renderChart();
-    if (k < 1) chartRaf = requestAnimationFrame(tick); else chartP = 1;
-  };
-  chartP = 0; renderChart(); chartRaf = requestAnimationFrame(tick);
 }
 /* Проверка вибрации: показывает, что поддерживает именно этот телефон и браузер */
 function hapticDiag() {
@@ -428,9 +475,9 @@ function flash(el) {
   setTimeout(() => el.classList.remove('flash'), 1400);
 }
 function clearForm() {                                  // только несохранённая форма
-  state.snap = null; state.snapPrice = null; fillForm(null);
+  state.snap = null; state.snapPrice = null; state.exp = []; state.bonus = {}; fillForm(null);
   $('status').textContent = 'Новый отчёт (форма очищена)';
-  renderEmps(); renderCalc();
+  renderEmps(); renderExp(); renderCalc();
 }
 function deleteReport() {
   if (!confirm('Удалить сохранённый отчёт за ' + dmy(state.date) + '?')) return;
@@ -481,17 +528,18 @@ function shiftMonth(delta) {
 
 /* ================= 8–9. Weekly / monthly statistics (из сохранённых дней) ================= */
 function summarize(list) {                              // list — дневные отчёты
-  const s = { days: list.length, people: 0, fee: 0, goods: 0, tp: {}, gp: {}, cash: 0, terminal: 0, total: 0, rent: 0, expense: 0, salary: 0, result: 0, best: null, worst: null, byEmp: {} };
+  const s = { days: list.length, people: 0, fee: 0, goods: 0, tp: {}, gp: {}, cash: 0, terminal: 0, total: 0, rent: 0, expense: 0, other: 0, bonus: 0, salary: 0, result: 0, best: null, worst: null, byEmp: {}, cats: {} };
   list.forEach(r => {
     const c = calc(r);
     s.people += r.people; s.fee += c.fee; s.goods += c.goods;
     if (r.terminal > 0) s.tp[String(termPctOf(r))] = 1;     // какие проценты были в периоде (для подписи в тексте отчёта)
     if (c.total > 0) s.gp[String(goodsPctOf(r))] = 1; s.cash += r.cash; s.terminal += r.terminal; s.total += c.total; s.rent += c.rent;
-    s.expense += c.expense; s.salary += c.salary; s.result += c.result;
-    r.employees.forEach(e => {                          // зарплата каждого сотрудника
-      const sal = num(e.salary), k = e.id || e.name;
-      const x = s.byEmp[k] || (s.byEmp[k] = { name: e.name, days: 0, sum: 0, last: '' });
-      x.sum += sal; if (sal > 0) x.days++;
+    s.expense += c.expense; s.other += c.other; s.bonus += c.bonus; s.salary += c.salary; s.result += c.result;
+    expItems(r).forEach(i => { const n = (i.name || '').trim() || 'Без статьи', k = n.toLowerCase(); const z = s.cats[k] || (s.cats[k] = { name: n, sum: 0 }); z.sum += num(i.sum); });
+    r.employees.forEach(e => {                          // зарплата каждого сотрудника (с процентом от кассы, премиями и штрафами)
+      const sal = empPay(e, c.total), k = e.id || e.name;
+      const x = s.byEmp[k] || (s.byEmp[k] = { name: e.name, days: 0, sum: 0, bonus: 0, last: '' });
+      x.sum += sal; x.bonus += snum(e.bonus); if (sal !== 0) x.days++;
       if (r.date >= x.last) { x.last = r.date; x.name = e.name; }
     });
     if (!s.best || c.result > s.best.v) s.best = { v: c.result, date: r.date };
@@ -500,7 +548,7 @@ function summarize(list) {                              // list — дневны
   s.avg = s.days ? round10(s.result / s.days) : 0;
   return s;
 }
-const empList = s => Object.keys(s.byEmp).map(k => s.byEmp[k]).filter(x => x.sum > 0).sort((a, b) => b.sum - a.sum);
+const empList = s => Object.keys(s.byEmp).map(k => s.byEmp[k]).filter(x => x.sum !== 0).sort((a, b) => b.sum - a.sum);
 const inRange = (from, to) => objReports().filter(r => r.date >= from && r.date <= to);
 function monthBounds(s) { const p = parseIso(s); return [iso(p.y, p.m, 1), iso(p.y, p.m, new Date(p.y, p.m + 1, 0).getDate())]; }
 function cell(label, value, wide, colored) {
@@ -566,7 +614,7 @@ function renderSalaries() {
   if (!emps.length) box.appendChild(el('div', 'empty', 'Нет данных за этот период'));
   emps.forEach(x => {
     const row = el('div');
-    row.append(el('span', '', x.name || 'Без имени'), el('b', '', x.days + ' дн. · ' + fmt(x.sum)));
+    row.append(el('span', '', x.name || 'Без имени'), el('b', '', x.days + ' дн. · ' + fmt(x.sum) + (x.bonus ? ' (' + (x.bonus > 0 ? 'премии +' : 'штрафы −') + fmt(Math.abs(x.bonus)) + ')' : '')));
     box.appendChild(row);
   });
   body.append(el('h3', '', 'По сотрудникам'), box);
@@ -579,7 +627,10 @@ function blockText(name, s, withEmps) {
   const L = [name, 'Людей ' + n2(s.people), 'Аренда ' + n2(s.rent), 'Касса ' + n2(s.total), 'Нал ' + n2(s.cash),
     'Тер ' + n2(s.terminal) + ' (' + pl(s.tp, s.fee, s.terminal) + '%=' + n2(s.fee) + ')'];
   if (s.goods > 0) L.push('Товар ' + n2(s.total) + ' (' + pl(s.gp, s.goods, s.total) + '%=' + n2(s.goods) + ')');
-  L.push('Зп ' + n2(s.salary), 'Расход ' + n2(s.expense), 'Остаток ' + n2(s.result));
+  L.push('Зп ' + n2(s.salary), 'Расход ' + n2(s.expense));
+  const cl = Object.keys(s.cats).map(k => s.cats[k]).filter(z => z.sum > 0);
+  if (cl.length) L.push('Статьи: ' + cl.map(z => z.name + ' ' + n2(z.sum)).join(', '));
+  L.push('Остаток ' + n2(s.result));
   const emps = withEmps ? empList(s) : [];
   if (emps.length) {
     L.push('', 'Зп по сотрудникам:');
@@ -618,136 +669,272 @@ async function copyReport(kind, onlyCur, btn) {
   setTimeout(() => { btn.textContent = old; }, 1500);
 }
 
-/* ================= 10. Dashboard + chart ================= */
-function renderDashboard() {
-  const t = todayIso(), wk = weekRange(t), mb = monthBounds(t);
-  const rt = reports[reportKey(state.objId, t)];
-  const set = (id, sub, v, text) => {
-    const e = $(id); e.textContent = fmt(v); e.className = 'big ' + (v < 0 ? 'neg-t' : v > 0 ? 'pos-t' : '');
-    $(id + 'Sub').textContent = text;
-  };
-  set('dashToday', 0, rt ? calc(rt).result : 0, rt ? 'Отчёт сохранён' : 'Отчёта за сегодня нет');
-  const w = summarize(inRange(wk[0], wk[6])), m = summarize(inRange(mb[0], mb[1]));
-  set('dashWeek', 0, w.result, 'Дней с отчётами: ' + w.days);
-  set('dashMonth', 0, m.result, 'Дней с отчётами: ' + m.days);
-}
-/* ---- График «Динамика результатов»: итог по дням недели (пт–чт) или месяца ---- */
-let chartGeo = null, chartHover = -1;
 const compact = n => {                                   // 7750 → 7,8к
   const a = Math.abs(n);
   if (a < 1000) return String(Math.round(n));
   return (n / 1000).toFixed(a >= 10000 ? 0 : 1).replace('.', ',').replace(',0', '') + 'к';
 };
-const niceStep = r => { const p = Math.pow(10, Math.floor(Math.log10(r))), f = r / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
-function chartModel() {
-  let dates, title;
-  if (state.tab === 'week') { dates = weekRange(state.date); title = 'Неделя ' + dmy(dates[0]) + ' – ' + dmy(dates[6]); }
-  else {
-    const p = parseIso(state.date), n = new Date(p.y, p.m + 1, 0).getDate();
-    dates = []; for (let d = 1; d <= n; d++) dates.push(iso(p.y, p.m, d));
-    title = MONTHS[p.m] + ' ' + p.y;
-  }
-  const days = dates.map(d => {
-    const r = reports[reportKey(state.objId, d)], q = parseIso(d), wd = (new Date(q.y, q.m, q.d).getDay() + 6) % 7;
-    return { date: d, day: q.d, mon: q.m + 1, wd: WD[wd], fri: wd === 4, r, res: r ? calc(r).result : null };
-  });
-  return { days, title };
+/* ================= Аналитика ================= */
+const addDaysIso = (s, n) => { const p = parseIso(s); return dateToIso(new Date(p.y, p.m, p.d + n)); };
+const daysBetween = (a, b) => { const x = parseIso(a), y = parseIso(b); return Math.round((Date.UTC(y.y, y.m, y.d) - Date.UTC(x.y, x.m, x.d)) / 86400000); };
+const nf = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU');
+const rub = n => fmt(Math.round(n));
+const sg = n => n > 0 ? '+' : n < 0 ? '−' : '';
+const allReports = () => Object.keys(reports).map(k => reports[k]);
+const anList = (from, to) => allReports().filter(r => r.date >= from && r.date <= to && (state.anAll || r.objectId === state.objId));
+function anBounds(shift) {                                // [от, до] текущего (0) или прошлого (-1) периода; неделя пт–чт
+  if (state.an === 'week') { const w = weekRange(addDaysIso(state.date, 7 * shift)); return [w[0], w[6]]; }
+  const p = parseIso(state.date), q = new Date(p.y, p.m + shift, 1);
+  return monthBounds(iso(q.getFullYear(), q.getMonth(), 1));
 }
-function renderChart() {
-  const c = $('chart');
-  if (!c) return;
-  const dpr = window.devicePixelRatio || 1, w = c.clientWidth || 600, h = 280;
-  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
-  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h);
-  const m = chartModel(), days = m.days, data = days.filter(d => d.res !== null);
-  chartGeo = null;
-  const sum = summarize(data.map(d => d.r));
-  $('chartSub').textContent = data.length
-    ? m.title + ' · дней с отчётами: ' + data.length + ' · итого ' + fmt(sum.result) + ' · в среднем ' + fmt(sum.avg) + ' в день'
-    : m.title;
-  x.font = '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif'; x.textBaseline = 'middle';
-  if (!data.length) { x.fillStyle = '#9a9aa8'; x.textAlign = 'center'; x.fillText('За этот период нет сохранённых отчётов', w / 2, h / 2); return; }
-  const vals = data.map(d => d.res);
-  let max = Math.max(0, ...vals), min = Math.min(0, ...vals);
-  const step = niceStep((max - min || 1) / 4);
-  max = Math.ceil(max / step) * step; min = Math.floor(min / step) * step;
-  const L = 46, R = 8, T = 26, B = state.tab === 'week' ? 38 : 26, n = days.length, bw = (w - L - R) / n, ph = h - T - B;
-  const y = v => T + (max - v) / (max - min) * ph;
-  chartGeo = { L, bw, n, w };
-  // сетка и подписи по вертикали
-  x.textAlign = 'right';
-  for (let v = min; v <= max + 1e-9; v += step) {
-    const yy = y(v);
-    x.strokeStyle = v === 0 ? '#6a6a78' : 'rgba(255,255,255,.07)'; x.lineWidth = 1;
-    x.beginPath(); x.moveTo(L, yy); x.lineTo(w - R, yy); x.stroke();
-    x.fillStyle = '#9a9aa8'; x.fillText(compact(v), L - 6, yy);
-  }
-  // границы недель (пятница) в месячном графике
-  if (state.tab === 'month') days.forEach((d, i) => { if (d.fri && i > 0) { x.strokeStyle = 'rgba(255,198,26,.18)'; x.beginPath(); x.moveTo(L + i * bw, T); x.lineTo(L + i * bw, T + ph); x.stroke(); } });
-  const best = data.reduce((a, d) => d.res > a.res ? d : a, data[0]), worst = data.reduce((a, d) => d.res < a.res ? d : a, data[0]);
-  const y0 = y(0);
-  days.forEach((d, i) => {
-    const bx = L + i * bw + bw * 0.16, ww = Math.max(3, bw * 0.68), hov = i === chartHover;
-    if (d.res === null) { x.fillStyle = 'rgba(255,255,255,.12)'; x.fillRect(bx, y0 - 1, ww, 2); }
-    else {
-      const pi = Math.max(0, Math.min(1, chartP * 1.7 - i / n * 0.7)), ez = 1 - Math.pow(1 - pi, 3);   // каждый столбик растёт со своей задержкой
-      const y1 = y0 + (y(d.res) - y0) * ez, top = Math.min(y0, y1), hh = Math.max(2, Math.abs(y1 - y0));
-      const g = x.createLinearGradient(0, top, 0, top + hh);
-      if (d.res >= 0) { g.addColorStop(0, hov ? '#ffe680' : '#ffd84d'); g.addColorStop(1, '#ff9f0a'); }
-      else { g.addColorStop(0, '#ff4046'); g.addColorStop(1, hov ? '#ff9a9d' : '#ff6b6f'); }
-      x.fillStyle = g; x.beginPath();
-      if (x.roundRect) x.roundRect(bx, top, ww, hh, 4); else x.rect(bx, top, ww, hh);
-      x.fill();
-      if (hov) { x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.stroke(); }
-      const showAll = bw >= 34;                            // подписи значений: везде, если хватает места, иначе у лучшего и худшего дня
-      if (showAll || d === best || d === worst || hov) {
-        x.font = (d === best || d === worst ? 'bold ' : '') + '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif';
-        x.fillStyle = d === best ? '#3ddc84' : d === worst && d.res < 0 ? '#ff6b6f' : '#f6f6f8';
-        x.globalAlpha = ez; x.textAlign = 'center'; x.fillText(compact(d.res), bx + ww / 2, d.res >= 0 ? top - 9 : top + hh + 10); x.globalAlpha = 1;
-        x.font = '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif';
-      }
+const anTitle = b => state.an === 'week' ? dmy(b[0]) + ' – ' + dmy(b[1]) : MONTHS[parseIso(b[0]).m] + ' ' + parseIso(b[0]).y;
+const avgCheck = s => s.people ? s.total / s.people : 0;      // средний чек = касса на одного человека
+function deltaChip(now, was, inverse, money) {
+  const d = now - was, p = was ? Math.round(d / Math.abs(was) * 1000) / 10 : null;
+  const good = inverse ? d < 0 : d > 0;                  // для расходов рост — плохо
+  const c = el('span', 'chip ' + (d === 0 ? 'flat' : good ? 'up' : 'down'));
+  const val = money ? rub(Math.abs(d)) : nf(Math.abs(d));
+  c.textContent = d === 0 ? 'без изменений' : (d > 0 ? '▲ ' : '▼ ') + val + (p !== null ? ' · ' + String(Math.abs(p)).replace('.', ',') + '%' : '');
+  return c;
+}
+function renderCmp() {
+  const bc = anBounds(0), bp = anBounds(-1);
+  const a = summarize(anList(bc[0], bc[1])), b = summarize(anList(bp[0], bp[1]));
+  $('cmpSub').textContent = anTitle(bc) + ' к ' + anTitle(bp) + ' · дней с отчётами: ' + a.days + ' и ' + b.days;
+  const box = $('cmpBody'); box.innerHTML = '';
+  if (!a.days && !b.days) { box.appendChild(el('div', 'empty', 'За эти периоды нет сохранённых отчётов')); return; }
+  [['Касса', a.total, b.total, true, false], ['Итог', a.result, b.result, true, false],
+   ['Расходы', a.expense, b.expense, true, true], ['Зарплаты', a.salary, b.salary, true, true],
+   ['Людей', a.people, b.people, false, false], ['Средний итог за день', a.avg, b.avg, true, false],
+   ['Средний чек', avgCheck(a), avgCheck(b), true, false]].forEach(r => {
+    const row = el('div', 'cmp');
+    row.append(el('span', 'nm', r[0]), el('b', 'now', r[3] ? rub(r[1]) : nf(r[1])),
+      el('span', 'was', 'было ' + (r[3] ? rub(r[2]) : nf(r[2]))), deltaChip(r[1], r[2], r[4], r[3]));
+    box.appendChild(row);
+  });
+}
+function renderPlan() {
+  const o = curObj(), pl = o.plan || {};
+  [['planDay', 'day'], ['planWeek', 'week'], ['planMonth', 'month']].forEach(p => { const i = $(p[0]); if (document.activeElement !== i) i.value = pl[p[1]] || ''; });
+  const box = $('planBody'); box.innerHTML = '';
+  const wk = weekRange(state.date), mb = monthBounds(state.date), today = todayIso(), pm = parseIso(state.date);
+  const fact = (from, to) => allReports().filter(r => r.objectId === o.id && r.date >= from && r.date <= to).reduce((s, r) => s + calc(r).total, 0);
+  [{ label: 'День · ' + dmy(state.date), plan: num(pl.day), from: state.date, to: state.date, fc: false },
+   { label: 'Неделя · ' + dmy(wk[0]) + ' – ' + dmy(wk[6]), plan: num(pl.week), from: wk[0], to: wk[6], fc: true },
+   { label: MONTHS[pm.m] + ' ' + pm.y, plan: num(pl.month), from: mb[0], to: mb[1], fc: true }].forEach(it => {
+    const f = fact(it.from, it.to), row = el('div', 'plan'), top = el('div', 'plan-top');
+    const pv = it.plan ? f / it.plan * 100 : 0;
+    top.append(el('b', '', it.label), el('span', '', it.plan ? rub(f) + ' из ' + rub(it.plan) + ' · ' + Math.round(pv) + '%' : rub(f) + ' · план не задан'));
+    const bar = el('div', 'bar' + (it.plan && f >= it.plan ? ' done' : '')), fill = el('i'); bar.appendChild(fill);
+    const len = daysBetween(it.from, it.to) + 1;
+    const elapsed = today > it.to ? len : today < it.from ? 0 : daysBetween(it.from, today) + 1;
+    const live = it.fc && elapsed > 0 && elapsed < len;     // период идёт прямо сейчас
+    if (live && it.plan) { const mk = el('span', 'mark'); mk.style.left = (elapsed / len * 100) + '%'; bar.appendChild(mk); }
+    row.append(top, bar);
+    const note = el('div', 'plan-note'), parts = [];
+    if (it.plan) parts.push(f >= it.plan ? '<span class="ok">План выполнен</span>, сверх плана <b>' + rub(f - it.plan) + '</b>' : 'Осталось до плана: <b>' + rub(it.plan - f) + '</b>');
+    if (live) {
+      const fc = f / elapsed * len;                       // прогноз по текущему темпу: выручка за прошедшие дни ÷ их число × длина периода
+      parts.push('Прогноз к концу периода: <b>' + rub(fc) + '</b>' + (it.plan ? (fc >= it.plan ? ' — <span class="ok">хватит с запасом ' + rub(fc - it.plan) + '</span>' : ' — <span class="bad">не хватит ' + rub(it.plan - fc) + '</span>') : ''));
     }
-    // подписи дат
-    x.textAlign = 'center'; x.fillStyle = d.fri ? '#ffc61a' : '#9a9aa8';
-    if (state.tab === 'week') {
-      x.fillText(d.wd, bx + ww / 2, h - 24); x.font = '11px system-ui,sans-serif';
-      x.fillText(pad(d.day) + '.' + pad(d.mon), bx + ww / 2, h - 10); x.font = '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif';
-    } else if (bw >= 18 || i % 2 === 0 || i === n - 1) x.fillText(String(d.day), bx + ww / 2, h - 11);
+    if (parts.length) { note.innerHTML = parts.join('<br>'); row.appendChild(note); }
+    box.appendChild(row);
+    requestAnimationFrame(() => { fill.style.width = Math.min(100, pv) + '%'; });
   });
-  // линия среднего по дням с отчётами
-  const avg = data.reduce((a, d) => a + d.res, 0) / data.length;
-  x.setLineDash([6, 4]); x.strokeStyle = 'rgba(255,198,26,.85)'; x.lineWidth = 1.4;
-  x.beginPath(); x.moveTo(L, y(avg)); x.lineTo(w - R, y(avg)); x.stroke(); x.setLineDash([]);
-  const at = 'ср. ' + compact(avg), aw = x.measureText(at).width + 12, ay = y(avg);   // подпись среднего — на тёмной плашке справа, чтобы не сливалась со столбиками
-  x.fillStyle = 'rgba(14,14,18,.92)'; x.strokeStyle = 'rgba(255,198,26,.7)'; x.lineWidth = 1; x.beginPath();
-  if (x.roundRect) x.roundRect(w - R - aw - 2, ay - 10, aw, 20, 6); else x.rect(w - R - aw - 2, ay - 10, aw, 20);
-  x.fill(); x.stroke(); x.textAlign = 'center'; x.fillStyle = '#ffc61a'; x.fillText(at, w - R - aw / 2 - 2, ay);
-  // подсказка по выбранному дню
-  const hd = days[chartHover];
-  if (hd && hd.r) {
-    const cc = calc(hd.r), lines = [hd.wd + ', ' + dmy(hd.date), 'Итог: ' + fmt(cc.result), 'Касса: ' + fmt(cc.total) + ' · людей ' + hd.r.people];
-    x.font = '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif';
-    const tw = Math.max.apply(null, lines.map(t => x.measureText(t).width)) + 20, th = 62;
-    let tx = L + chartHover * bw + bw / 2 - tw / 2; tx = Math.max(4, Math.min(w - tw - 4, tx));
-    x.fillStyle = 'rgba(12,12,16,.96)'; x.strokeStyle = '#ffc61a'; x.lineWidth = 1;
-    x.beginPath(); if (x.roundRect) x.roundRect(tx, 2, tw, th, 8); else x.rect(tx, 2, tw, th); x.fill(); x.stroke();
-    x.textAlign = 'left'; x.fillStyle = '#9a9aa8'; x.fillText(lines[0], tx + 10, 15);
-    x.fillStyle = hd.res < 0 ? '#ff6b6f' : '#3ddc84'; x.font = 'bold 12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif'; x.fillText(lines[1], tx + 10, 32);
-    x.font = '12px Manrope,system-ui,-apple-system,"Segoe UI",sans-serif'; x.fillStyle = '#f6f6f8'; x.fillText(lines[2], tx + 10, 49);
-  }
 }
-function chartPointer(e) {
-  if (!chartGeo) return;
-  const r = $('chart').getBoundingClientRect(), i = Math.floor((e.clientX - r.left - chartGeo.L) / chartGeo.bw);
-  const k = i >= 0 && i < chartGeo.n ? i : -1;
-  if (k !== chartHover) { chartHover = k; renderChart(); }
+function renderEff() {
+  const b = anBounds(0), s = summarize(anList(b[0], b[1])), box = $('effBody');
+  $('effSub').textContent = anTitle(b) + ' · дней с отчётами: ' + s.days;
+  box.innerHTML = '';
+  if (!s.days) { box.appendChild(el('div', 'empty', 'За этот период нет сохранённых отчётов')); return; }
+  const g = el('div', 'eff');
+  g.append(cell('Средний чек (касса на человека)', rub(avgCheck(s))), cell('Чистыми на человека', rub(s.people ? s.result / s.people : 0)),
+    cell('Людей в день', nf(Math.round(s.people / s.days * 10) / 10)), cell('Касса в день', rub(s.total / s.days)));
+  box.appendChild(g);
 }
-function renderAll() { renderCalendar(); renderHistory(); renderStats(); renderSalaries(); renderDashboard(); chartHover = -1; renderChart(); }
+const WDAT = ['понедельникам', 'вторникам', 'средам', 'четвергам', 'пятницам', 'субботам', 'воскресеньям'];
+function renderWd() {
+  const to = state.date, list = anList(addDaysIso(to, -90), to), box = $('wdBody');
+  $('wdSub').textContent = 'Средний итог по дням недели за последние 90 дней · дней с отчётами: ' + list.length;
+  box.innerHTML = '';
+  const acc = [0, 1, 2, 3, 4, 5, 6].map(() => ({ sum: 0, n: 0 })); let all = 0;
+  list.forEach(r => { const p = parseIso(r.date), i = (new Date(p.y, p.m, p.d).getDay() + 6) % 7, v = calc(r).result; acc[i].sum += v; acc[i].n++; all += v; });
+  const have = acc.map((a, i) => ({ i, n: a.n, avg: a.n ? a.sum / a.n : 0 })).filter(x => x.n);
+  if (have.length < 2) { box.appendChild(el('div', 'empty', 'Нужны отчёты хотя бы за два разных дня недели')); return; }
+  const mean = all / list.length, best = have.reduce((a, x) => x.avg > a.avg ? x : a), worst = have.reduce((a, x) => x.avg < a.avg ? x : a);
+  const mx = Math.max.apply(null, have.map(x => Math.abs(x.avg)).concat(1));
+  [4, 5, 6, 0, 1, 2, 3].forEach(i => {                      // порядок как в рабочей неделе: пт … чт
+    const x = have.find(h => h.i === i);
+    const row = el('div', 'wd' + (x && x.i === best.i ? ' best' : x && x.i === worst.i && best.i !== worst.i ? ' worst' : '') + (x && x.avg < 0 ? ' neg' : ''));
+    const tr = el('div', 'tr'), fill = el('i'); tr.appendChild(fill);
+    const v = el('b', '', x ? rub(x.avg) : '—'); if (x) v.appendChild(el('small', '', x.n + ' дн.'));
+    row.append(el('span', 'd', WD[i]), tr, v); box.appendChild(row);
+    if (x) requestAnimationFrame(() => { fill.style.width = Math.max(3, Math.abs(x.avg) / mx * 100) + '%'; });
+  });
+  const say = el('div', 'wd-say'), pc = d => mean ? ' (' + sg(d) + Math.abs(Math.round(d / Math.abs(mean) * 100)) + '%)' : '';
+  if (best.avg - mean > 0) say.appendChild(el('p', '', 'По ' + WDAT[best.i] + ' вы зарабатываете чистыми в среднем ' + rub(best.avg) + ' — на ' + rub(best.avg - mean) + pc(best.avg - mean) + ' больше обычного дня.'));
+  if (best.i !== worst.i && mean - worst.avg > 0) say.appendChild(el('p', '', 'Слабее всего по ' + WDAT[worst.i] + ': ' + rub(worst.avg) + ', на ' + rub(mean - worst.avg) + pc(worst.avg - mean) + ' меньше обычного дня.'));
+  if (say.children.length) box.appendChild(say);
+}
+const PIE_COLORS = ['#ffc61a', '#6ea8fe', '#ff6b6f', '#b98cff', '#5eead4', '#ff9f0a', '#f472b6', '#a3e635', '#94a3b8', '#fb923c'];
+function renderPie() {
+  const b = anBounds(0), s = summarize(anList(b[0], b[1])), box = $('pieBody');
+  $('pieSub').textContent = anTitle(b) + (state.anAll ? ' · все объекты' : '') + ' · из чего складывается касса';
+  box.innerHTML = '';
+  const parts = [['Товар', s.goods], ['Аренда', s.rent], ['Комиссия терминала', s.fee], ['Зарплаты', s.salary]];
+  Object.keys(s.cats).forEach(k => parts.push([s.cats[k].name, s.cats[k].sum]));
+  parts.push(['Прочие расходы', s.other]);
+  const out = parts.filter(p => p[1] > 0), spent = out.reduce((a, p) => a + p[1], 0), left = s.total - spent;
+  if (!s.days || (!s.total && !spent)) { box.appendChild(el('div', 'empty', 'За этот период нет данных для диаграммы')); return; }
+  const items = out.map((p, i) => ({ name: p[0], v: p[1], c: PIE_COLORS[i % PIE_COLORS.length] }));
+  if (left > 0) items.push({ name: 'Остаётся (итог)', v: left, c: '#3ddc84' });
+  const den = Math.max(s.total, spent), NS = 'http://www.w3.org/2000/svg';
+  const wrap = el('div', 'pie-wrap'), pie = el('div', 'pie'), svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 42 42'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Диаграмма расходов');
+  const bg = document.createElementNS(NS, 'circle'); bg.setAttribute('cx', 21); bg.setAttribute('cy', 21); bg.setAttribute('r', 15.9155);
+  bg.setAttribute('fill', 'none'); bg.setAttribute('stroke', 'rgba(255,255,255,.06)'); bg.setAttribute('stroke-width', 6); svg.appendChild(bg);
+  let acc = 0;
+  items.forEach((it, i) => {
+    const p = it.v / den * 100, c = document.createElementNS(NS, 'circle');
+    c.setAttribute('class', 'pie-seg'); c.setAttribute('cx', 21); c.setAttribute('cy', 21); c.setAttribute('r', 15.9155);
+    c.setAttribute('stroke', it.c); c.setAttribute('stroke-dashoffset', -acc); const gap = items.length > 1 ? 0.4 : 0; c.style.strokeDasharray = Math.max(0, p - gap) + ' ' + (100 - Math.max(0, p - gap));
+    c.style.animationDelay = (i * 0.09) + 's'; svg.appendChild(c); acc += p;
+  });
+  const mid = el('div', 'pie-mid'); mid.append(el('small', '', 'Ушло'), el('b', '', rub(spent)), el('small', '', 'из ' + rub(s.total)));
+  pie.append(svg, mid);
+  const lg = el('div', 'legend2');
+  items.forEach(it => {
+    const r = el('div', 'lg2'), dot = el('i'); dot.style.background = it.c;
+    const val = el('b', '', rub(it.v)); val.appendChild(el('em', '', String(Math.round(it.v / den * 1000) / 10).replace('.', ',') + '%'));
+    r.append(dot, el('span', '', it.name), val); lg.appendChild(r);
+  });
+  wrap.append(pie, lg); box.appendChild(wrap);
+}
+function renderAnalytics() {
+  if (!curObj()) return;
+  $('anWeekBtn').classList.toggle('active', state.an === 'week'); $('anMonthBtn').classList.toggle('active', state.an === 'month');
+  $('anWeekBtn').parentNode.classList.toggle('is-month', state.an === 'month');
+  $('anAllChk').checked = state.anAll;
+  $('anSub').textContent = (state.anAll ? 'Все объекты' : curObj().name) + ' · период по дате ' + dmy(state.date);
+  if (!$('expMonth').value) $('expMonth').value = state.date.slice(0, 7);
+  renderCmp(); renderPlan(); renderEff(); renderWd(); renderPie();
+}
+function switchAn(val) {
+  const same = state.an === val; state.an = val; renderAnalytics();
+  if (!same) { ['cmpBody', 'effBody', 'pieBody'].forEach(id => swapAnim($(id), val === 'month' ? 1 : -1)); haptic(35); }
+}
+
+/* ---- Выгрузка за месяц: Excel (.xlsx без внешних библиотек) и PDF (через печать) ---- */
+function monthData(ym) {
+  const p = ym.split('-').map(Number), y = p[0], m = p[1], from = iso(y, m - 1, 1), to = iso(y, m - 1, new Date(y, m, 0).getDate()), groups = [];
+  objects.forEach(o => {
+    const l = allReports().filter(r => r.objectId === o.id && r.date >= from && r.date <= to).sort((a, b) => a.date < b.date ? -1 : 1);
+    if (l.length) groups.push({ name: o.name, list: l, s: summarize(l) });
+  });
+  return { title: MONTHS[m - 1] + ' ' + y, ym, groups, all: summarize(groups.reduce((a, g) => a.concat(g.list), [])) };
+}
+const XH = ['Дата', 'День', 'Людей', 'Аренда', 'Наличные', 'Терминал', 'Касса', 'Комиссия терминала', 'Товар', 'Расходы', 'Зарплаты', 'Итог'];
+const XS = ['Объект', 'Дней', 'Людей', 'Аренда', 'Касса', 'Комиссия терминала', 'Товар', 'Расходы', 'Зарплаты', 'Итог'];
+const r2 = n => Math.round(n * 100) / 100;
+function dayRow(r) {
+  const c = calc(r), q = parseIso(r.date);
+  return [dmy(r.date), WD[(new Date(q.y, q.m, q.d).getDay() + 6) % 7], r.people, c.rent, r.cash, r.terminal, c.total, c.fee, c.goods, c.expense, c.salary, c.result].map(v => typeof v === 'number' ? r2(v) : v);
+}
+const totRow = s => ['Итого', '', s.people, s.rent, s.cash, s.terminal, s.total, s.fee, s.goods, s.expense, s.salary, s.result].map(v => typeof v === 'number' ? r2(v) : v);
+const sumRow = (name, s) => [name, s.days, s.people, s.rent, s.total, s.fee, s.goods, s.expense, s.salary, s.result].map(v => typeof v === 'number' ? r2(v) : v);
+function catRows(s) {                                      // расходы по статьям и зарплаты по сотрудникам
+  const cr = []; if (s.other > 0) cr.push(['Прочие расходы (без статьи)', r2(s.other)]);
+  Object.keys(s.cats).forEach(k => cr.push([s.cats[k].name, r2(s.cats[k].sum)]));
+  return { cats: cr, emps: empList(s).map(x => [x.name || 'Без имени', x.days, r2(x.sum), r2(x.bonus)]) };
+}
+const CRC_T = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = u => { let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC_T[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+function zipStore(files) {                                 // zip без сжатия: для xlsx этого достаточно
+  const enc = new TextEncoder(), parts = [], cen = []; let off = 0;
+  const u16 = n => [n & 255, (n >> 8) & 255], u32 = n => [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255];
+  files.forEach(f => {
+    const nm = enc.encode(f.name), data = enc.encode(f.text), crc = crc32(data), sz = data.length;
+    parts.push(new Uint8Array([0x50, 0x4b, 3, 4, 20, 0, 0, 8, 0, 0, 0, 0, 0x21, 0].concat(u32(crc), u32(sz), u32(sz), u16(nm.length), [0, 0])), nm, data);
+    cen.push(new Uint8Array([0x50, 0x4b, 1, 2, 20, 0, 20, 0, 0, 8, 0, 0, 0, 0, 0x21, 0].concat(u32(crc), u32(sz), u32(sz), u16(nm.length), [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], u32(off))), nm);
+    off += 30 + nm.length + sz;
+  });
+  const cs = cen.reduce((a, c) => a + c.length, 0);
+  return new Blob(parts.concat(cen, [new Uint8Array([0x50, 0x4b, 5, 6, 0, 0, 0, 0].concat(u16(files.length), u16(files.length), u32(cs), u32(off), [0, 0]))]), { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+const xe = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const colName = i => { let s = ''; for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; };
+function sheetXml(rows, widths) {                         // стили: 1 шапка, 2 число, 3 итог-число, 4 итог-текст, 5 заголовок
+  const x = rows.map((row, ri) => '<row r="' + (ri + 1) + '">' + row.map((c, ci) => {
+    if (c === null || c === undefined || c === '') return '';
+    const o = typeof c === 'object' ? c : { v: c }, ref = colName(ci) + (ri + 1);
+    if (typeof o.v === 'number') return '<c r="' + ref + '" s="' + (o.s != null ? o.s : 2) + '"><v>' + o.v + '</v></c>';
+    return '<c r="' + ref + '" t="inlineStr"' + (o.s ? ' s="' + o.s + '"' : '') + '><is><t xml:space="preserve">' + xe(o.v) + '</t></is></c>';
+  }).join('') + '</row>').join('');
+  const cols = widths ? '<cols>' + widths.map((w, i) => '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>').join('') + '</cols>' : '';
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"/></sheetViews>' + cols + '<sheetData>' + x + '</sheetData></worksheet>';
+}
+function makeXlsx(sheets) {
+  const NSM = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main', NSR = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', H = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const used = {}, names = sheets.map(s => { let n = s.name.replace(/[\[\]:*?\/\\]/g, '').slice(0, 31) || 'Лист', k = n, i = 2; while (used[k.toLowerCase()]) k = n.slice(0, 28) + ' ' + i++; used[k.toLowerCase()] = 1; return k; });
+  const files = [
+    { name: '[Content_Types].xml', text: H + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + sheets.map((s, i) => '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('') + '</Types>' },
+    { name: '_rels/.rels', text: H + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: 'xl/workbook.xml', text: H + '<workbook xmlns="' + NSM + '" xmlns:r="' + NSR + '"><sheets>' + names.map((n, i) => '<sheet name="' + xe(n) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join('') + '</sheets></workbook>' },
+    { name: 'xl/_rels/workbook.xml.rels', text: H + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + sheets.map((s, i) => '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>').join('') + '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+    { name: 'xl/styles.xml', text: H + '<styleSheet xmlns="' + NSM + '"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF7D56A"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color auto="1"/></bottom><diagonal/></border><border><left/><right/><top style="thin"><color auto="1"/></top><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="3" fontId="1" fillId="0" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1"/><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>' }
+  ];
+  sheets.forEach((s, i) => files.push({ name: 'xl/worksheets/sheet' + (i + 1) + '.xml', text: sheetXml(s.rows, s.widths) }));
+  return zipStore(files);
+}
+const hd = a => a.map(v => ({ v, s: 1 })), tt = (a, ) => a.map((v, i) => ({ v, s: typeof v === 'number' ? 3 : 4 }));
+function downloadBlob(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+function exportXlsx() {
+  const ym = $('expMonth').value || state.date.slice(0, 7), d = monthData(ym);
+  if (!d.groups.length) { alert('Нет сохранённых отчётов за ' + d.title + '.'); return; }
+  const sheets = [{ name: 'Сводка', widths: [26, 8, 9, 12, 13, 14, 12, 12, 12, 13],
+    rows: [[{ v: 'Сводка за ' + d.title, s: 5 }], [], hd(XS)].concat(d.groups.map(g => sumRow(g.name, g.s)), [tt(sumRow('Всего', d.all))]) }];
+  d.groups.forEach(g => {
+    const x = catRows(g.s), rows = [[{ v: g.name + ' — ' + d.title, s: 5 }], [], hd(XH)].concat(g.list.map(dayRow), [tt(totRow(g.s))]);
+    if (x.cats.length) rows.push([], [{ v: 'Расходы по статьям', s: 5 }], hd(['Статья', 'Сумма'])), x.cats.forEach(c => rows.push(c));
+    if (x.emps.length) rows.push([], [{ v: 'Зарплаты по сотрудникам', s: 5 }], hd(['Сотрудник', 'Дней', 'Сумма', 'в т.ч. премии/штрафы'])), x.emps.forEach(c => rows.push(c));
+    sheets.push({ name: g.name, rows, widths: [26, 8, 9, 12, 13, 13, 13, 14, 12, 12, 12, 13] });
+  });
+  downloadBlob(makeXlsx(sheets), 'finance_report_' + ym + '.xlsx');
+  celebrate('copy');
+}
+function printMonth() {
+  const ym = $('expMonth').value || state.date.slice(0, 7), d = monthData(ym);
+  if (!d.groups.length) { alert('Нет сохранённых отчётов за ' + d.title + '.'); return; }
+  const area = $('printArea'); area.innerHTML = '';
+  const tbl = (head, rows, totIdx, cls) => {
+    const t = el('table', cls || ''), th = el('tr'); head.forEach(h => th.appendChild(el('th', '', h))); t.appendChild(th);
+    rows.forEach((r, ri) => { const tr = el('tr', ri === totIdx ? 'tot' : ''); r.forEach(c => tr.appendChild(el('td', '', typeof c === 'number' ? nf(c) : String(c)))); t.appendChild(tr); });
+    return t;
+  };
+  area.appendChild(el('h1', '', 'Финансовый отчёт — ' + d.title));
+  area.appendChild(el('h2', '', 'Сводка по объектам'));
+  area.appendChild(tbl(XS, d.groups.map(g => sumRow(g.name, g.s)).concat([sumRow('Всего', d.all)]), d.groups.length, 'sm'));
+  d.groups.forEach(g => {
+    const x = catRows(g.s);
+    area.appendChild(el('h2', '', g.name));
+    area.appendChild(tbl(XH, g.list.map(dayRow).concat([totRow(g.s)]), g.list.length));
+    if (x.cats.length) area.appendChild(tbl(['Статья расходов', 'Сумма'], x.cats, -1, 'sm'));
+    if (x.emps.length) area.appendChild(tbl(['Сотрудник', 'Дней', 'Сумма', 'в т.ч. премии/штрафы'], x.emps, -1, 'sm'));
+  });
+  document.body.classList.add('printing');
+  const off = () => { document.body.classList.remove('printing'); window.removeEventListener('afterprint', off); document.removeEventListener('pointerdown', off, true); };
+  window.addEventListener('afterprint', off); document.addEventListener('pointerdown', off, true);   // страховка: вернуть обычный вид, если afterprint не сработает
+  setTimeout(() => window.print(), 50);
+}
+function renderAll() { renderCalendar(); renderHistory(); renderStats(); renderSalaries(); renderAnalytics(); }
 
 /* ================= Страницы и нижняя панель ================= */
 function showPage(n) {
-  n = ([1, 2, 3].indexOf(n) >= 0 || (n === 4 && isAdmin)) ? n : 1;
-  [1, 2, 3, 4].forEach(i => { $('page' + i).hidden = i !== n; });
+  n = ([1, 2, 3, 5].indexOf(n) >= 0 || (n === 4 && isAdmin)) ? n : 1;
+  [1, 2, 3, 4, 5].forEach(i => { $('page' + i).hidden = i !== n; });
   document.querySelectorAll('.nav-btn').forEach(b => {
     const on = Number(b.dataset.page) === n;
     b.classList.toggle('active', on);
@@ -755,7 +942,7 @@ function showPage(n) {
   });
   try { localStorage.setItem('finance_page', String(n)); } catch (e) {}
   window.scrollTo(0, 0);
-  if (n === 2) animateChart();
+  if (n === 5) renderAnalytics();
   if (n === 4) loadAdmin();                            // график рисуется только когда страница видна
 }
 
@@ -778,7 +965,7 @@ function bind() {
   $('menuBtn').addEventListener('click', e => { e.stopPropagation(); $('menu').hidden = !$('menu').hidden; });
   document.addEventListener('click', () => { $('menu').hidden = true; });
   $('renameBtn').addEventListener('click', renameObject);
-  $('settingsBtn').addEventListener('click', () => { $('setName').value = curObj().name; $('setPrice').value = curObj().rentPrice; $('setTermPct').value = objTermPct(curObj()); $('setGoodsPct').value = objGoodsPct(curObj()); $('settings').hidden = false; });
+  $('settingsBtn').addEventListener('click', () => { $('setName').value = curObj().name; $('setPrice').value = curObj().rentPrice; $('setTermPct').value = objTermPct(curObj()); $('setGoodsPct').value = objGoodsPct(curObj()); $('setCats').value = objCats(curObj()).join(', '); $('settings').hidden = false; });
   $('deleteObjectBtn').addEventListener('click', deleteObject);
   $('saveSettingsBtn').addEventListener('click', saveSettings);
   $('closeSettingsBtn').addEventListener('click', () => { $('settings').hidden = true; });
@@ -786,6 +973,8 @@ function bind() {
   $('dateInput').addEventListener('change', e => setDate(e.target.value || todayIso()));
   $('toggleEmpFormBtn').addEventListener('click', () => { $('empForm').hidden = !$('empForm').hidden; if (!$('empForm').hidden) $('empNameInput').focus(); });
   $('saveEmpBtn').addEventListener('click', addEmployee);
+  $('addExpBtn').addEventListener('click', addExp);
+  $('empModeInput').addEventListener('change', e => { $('empSalaryInput').placeholder = e.target.value === 'pct' ? '% от кассы' : 'Зарплата, ₽'; });
   $('empSalaryInput').addEventListener('keydown', e => { if (e.key === 'Enter') addEmployee(); });
   $('saveReportBtn').addEventListener('click', saveReport);
   $('clearBtn').addEventListener('click', clearForm);
@@ -798,6 +987,16 @@ function bind() {
   $('prevMonthBtn').addEventListener('click', () => shiftMonth(-1));
   $('nextMonthBtn').addEventListener('click', () => shiftMonth(1));
   $('hapticTestBtn').addEventListener('click', hapticDiag);
+  $('anWeekBtn').addEventListener('click', () => switchAn('week'));
+  $('anMonthBtn').addEventListener('click', () => switchAn('month'));
+  $('anAllChk').addEventListener('change', e => { state.anAll = e.target.checked; renderAnalytics(); });
+  ['planDay', 'planWeek', 'planMonth'].forEach(id => $(id).addEventListener('input', () => {
+    if (readOnly) return;
+    const o = curObj(); o.plan = { day: num($('planDay').value), week: num($('planWeek').value), month: num($('planMonth').value) };
+    saveObjects(); renderPlan();
+  }));
+  $('xlsxBtn').addEventListener('click', exportXlsx);
+  $('pdfBtn').addEventListener('click', printMonth);
   $('weekBtn').addEventListener('click', () => switchPeriod('tab', 'week'));
   $('monthBtn').addEventListener('click', () => switchPeriod('tab', 'month'));
   // кнопки копирования: если в index.html их нет (старая версия), остальное приложение всё равно работает
@@ -808,10 +1007,6 @@ function bind() {
   $('salWeekBtn').addEventListener('click', () => switchPeriod('stab', 'week'));
   $('salMonthBtn').addEventListener('click', () => switchPeriod('stab', 'month'));
   document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => { haptic(30); showPage(Number(b.dataset.page)); }));
-  $('chart').addEventListener('pointermove', chartPointer);
-  $('chart').addEventListener('pointerdown', chartPointer);
-  $('chart').addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && chartHover !== -1) { chartHover = -1; renderChart(); } });
-  window.addEventListener('resize', renderChart);
 }
 
 function startUI() {
@@ -836,7 +1031,7 @@ async function connect() {                                       // подпис
   return true;
 }
 function setReadonlyInputs(on) {
-  ['peopleInput', 'cashInput', 'terminalInput', 'expenseInput', 'termPctInput', 'goodsPctInput'].forEach(id => { $(id).disabled = on; });
+  ['peopleInput', 'cashInput', 'terminalInput', 'expenseInput', 'termPctInput', 'goodsPctInput', 'planDay', 'planWeek', 'planMonth'].forEach(id => { $(id).disabled = on; });
 }
 async function viewAs(uid, label) {                               // админ: открыть данные пользователя (только чтение)
   flushObjects();
@@ -911,7 +1106,6 @@ function bindAccount() {
 bind();
 bindAccount();
 showPage(Number(localStorage.getItem('finance_page')) || 1);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => renderChart());   // перерисовать график, когда загрузится шрифт
 onAuthStateChanged(auth, async user => {
   $('boot').hidden = true;                              // приложение запустилось — убираем экран загрузки
   unsubs.forEach(u => u()); unsubs = [];

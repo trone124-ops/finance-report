@@ -932,8 +932,56 @@ function printMonth() {
 function renderAll() { renderCalendar(); renderHistory(); renderStats(); renderSalaries(); renderAnalytics(); }
 
 /* ================= Страницы и нижняя панель ================= */
+/* ---- Переключение окон: уходящая страница уезжает «призраком», новая влетает каскадом, плашка в меню переливается ---- */
+let curPage = null, pillBox = null;
+const NAV_ORDER = [1, 2, 5, 3, 4];                       // порядок кнопок в нижнем меню
+const reducedMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function pageGhost(oldEl, dir) {                          // копия уходящей страницы, которая плавно исчезает
+  if (!oldEl || reducedMotion()) return null;
+  const r = oldEl.getBoundingClientRect();
+  if (!r.width || !r.height) return null;
+  const g = oldEl.cloneNode(true);
+  g.hidden = false; g.className = 'page ghost'; g.setAttribute('aria-hidden', 'true');
+  g.removeAttribute('id'); g.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));   // без дубликатов id
+  g.querySelectorAll('[for],[list]').forEach(e => { e.removeAttribute('for'); e.removeAttribute('list'); });
+  const src = oldEl.querySelectorAll('input,select,textarea'), dst = g.querySelectorAll('input,select,textarea');
+  src.forEach((x, i) => {                                  // перенести введённые значения, чтобы поля не «пустели» на лету
+    const d = dst[i]; if (!d) return; d.tabIndex = -1;
+    if (x.type === 'checkbox' || x.type === 'radio') { if (x.checked) d.setAttribute('checked', ''); else d.removeAttribute('checked'); }
+    else if (x.tagName === 'SELECT') { Array.from(d.options).forEach((o, k) => { if (k === x.selectedIndex) o.setAttribute('selected', ''); else o.removeAttribute('selected'); }); }
+    else if (x.tagName === 'TEXTAREA') d.textContent = x.value; else d.setAttribute('value', x.value);
+  });
+  g.style.cssText = 'top:' + r.top + 'px;left:' + r.left + 'px;width:' + r.width + 'px;--gx:' + (-dir * 64) + 'px;--gr:' + (dir * 7) + 'deg';
+  oldEl.parentNode.insertBefore(g, oldEl.nextSibling);
+  setTimeout(() => g.remove(), 520);
+  return g;
+}
+function enterPage(el, dir) {                             // карточки новой страницы вылетают по очереди с лёгким наклоном
+  if (!el || reducedMotion()) return;
+  el.classList.remove('enter-f', 'enter-b'); void el.offsetWidth;
+  el.style.setProperty('--dx', (dir * 54) + 'px'); el.style.setProperty('--ry', (dir * -10) + 'deg');
+  Array.from(el.children).forEach((c, i) => c.style.setProperty('--i', Math.min(i, 9)));
+  el.classList.add(dir > 0 ? 'enter-f' : 'enter-b');
+  clearTimeout(enterPage.t); enterPage.t = setTimeout(() => el.classList.remove('enter-f', 'enter-b'), 1500);
+}
+function moveNavPill(snap) {                              // золотая плашка: растягивается к новой кнопке и «садится» с отскоком
+  const pill = $('navPill'), btn = document.querySelector('.nav-btn.active');
+  if (!pill || !btn || btn.hidden || !btn.offsetWidth) return;
+  const L = btn.offsetLeft, W = btn.offsetWidth, T = btn.offsetTop, H = btn.offsetHeight;
+  const set = (l, w) => { pill.style.transform = 'translate(' + l + 'px,' + T + 'px)'; pill.style.width = w + 'px'; pill.style.height = H + 'px'; };
+  clearTimeout(moveNavPill.t);
+  if (snap || !pillBox || reducedMotion()) { pill.classList.add('snap'); set(L, W); void pill.offsetWidth; pill.classList.remove('snap'); }
+  else {
+    const left = Math.min(pillBox.L, L), right = Math.max(pillBox.L + pillBox.W, L + W);
+    set(left, right - left);                              // 1) растянуться от старой кнопки до новой
+    moveNavPill.t = setTimeout(() => set(L, W), 150);     // 2) сжаться на новой кнопке
+  }
+  pillBox = { L, W };
+}
 function showPage(n) {
   n = ([1, 2, 3, 5].indexOf(n) >= 0 || (n === 4 && isAdmin)) ? n : 1;
+  const prev = curPage, dir = prev && prev !== n ? (NAV_ORDER.indexOf(n) > NAV_ORDER.indexOf(prev) ? 1 : -1) : 0;
+  const ghost = dir ? pageGhost($('page' + prev), dir) : null;   // снимок уходящей страницы — пока она ещё видна
   [1, 2, 3, 4, 5].forEach(i => { $('page' + i).hidden = i !== n; });
   document.querySelectorAll('.nav-btn').forEach(b => {
     const on = Number(b.dataset.page) === n;
@@ -942,8 +990,12 @@ function showPage(n) {
   });
   try { localStorage.setItem('finance_page', String(n)); } catch (e) {}
   window.scrollTo(0, 0);
+  if (ghost) { const nt = $('page' + n).getBoundingClientRect().top; ghost.style.clipPath = 'inset(' + Math.max(0, nt - parseFloat(ghost.style.top)) + 'px 0 0 0)'; }   // призрак не заезжает на шапку
+  curPage = n;
+  if (dir) enterPage($('page' + n), dir);
+  moveNavPill();
   if (n === 5) renderAnalytics();
-  if (n === 4) loadAdmin();                            // график рисуется только когда страница видна
+  if (n === 4) loadAdmin();
 }
 
 /* ================= Events ================= */
@@ -987,6 +1039,8 @@ function bind() {
   $('prevMonthBtn').addEventListener('click', () => shiftMonth(-1));
   $('nextMonthBtn').addEventListener('click', () => shiftMonth(1));
   $('hapticTestBtn').addEventListener('click', hapticDiag);
+  if (window.ResizeObserver) new ResizeObserver(() => moveNavPill(true)).observe($('bottomNav')); else window.addEventListener('resize', () => moveNavPill(true));
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => moveNavPill(true));
   $('anWeekBtn').addEventListener('click', () => switchAn('week'));
   $('anMonthBtn').addEventListener('click', () => switchAn('month'));
   $('anAllChk').addEventListener('change', e => { state.anAll = e.target.checked; renderAnalytics(); });

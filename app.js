@@ -177,7 +177,7 @@ async function firstRun() {                                        // облак
 }
 
 /* ================= State ================= */
-const state = { objId: null, date: todayIso(), snap: null, calY: 0, calM: 0, tab: 'week', stab: 'week', snapPrice: null, exp: [], bonus: {}, an: 'week', anAll: false };
+const state = { objId: null, date: todayIso(), snap: null, calY: 0, calM: 0, tab: 'week', stab: 'week', snapPrice: null, exp: [], bonus: {}, an: 'week', anAll: false, sscope: (function () { try { return localStorage.getItem('finance_sal_scope') === 'obj' ? 'obj' : 'all'; } catch (e) { return 'all'; } })() };
 const reportKey = (objId, date) => objId + '_' + date;
 const curObj = () => objects.find(o => o.id === state.objId) || null;
 
@@ -596,28 +596,68 @@ function renderStats() {
 }
 
 /* ================= Страница 3: зарплаты (неделя / месяц) ================= */
+/* Зарплаты за период по всем объектам: один человек, работавший на нескольких объектах, считается один раз (по имени) */
+function salaryAgg(list) {
+  const people = {}; let total = 0;
+  list.forEach(r => {
+    const c = calc(r); total += c.salary;
+    r.employees.forEach(e => {
+      const pay = empPay(e, c.total); if (pay === 0) return;
+      const name = (e.name || '').trim(), key = name.toLowerCase() || ('id:' + (e.id || ''));
+      const p = people[key] || (people[key] = { name, dates: {}, sum: 0, bonus: 0, objs: {} });
+      p.sum += pay; p.bonus += snum(e.bonus); p.dates[r.date] = 1;
+      const o = p.objs[r.objectId] || (p.objs[r.objectId] = { sum: 0, dates: {} }); o.sum += pay; o.dates[r.date] = 1;
+    });
+  });
+  return { total, people: Object.keys(people).map(k => people[k]).sort((a, b) => b.sum - a.sum) };
+}
+const objName = id => { const o = objects.find(x => x.id === id); return o ? o.name : 'Удалённый объект'; };
+const payText = (days, sum, bonus) => days + ' дн. · ' + fmt(sum) + (bonus ? ' (' + (bonus > 0 ? 'премии +' : 'штрафы −') + fmt(Math.abs(bonus)) + ')' : '');
 function renderSalaries() {
   const body = $('salaryBody');
   body.innerHTML = '';
   $('salWeekBtn').classList.toggle('active', state.stab === 'week');
   $('salMonthBtn').classList.toggle('active', state.stab === 'month');
   $('salWeekBtn').parentNode.classList.toggle('is-month', state.stab === 'month');
+  $('salAllBtn').classList.toggle('active', state.sscope === 'all');
+  $('salObjBtn').classList.toggle('active', state.sscope === 'obj');
+  $('salAllBtn').parentNode.classList.toggle('is-month', state.sscope === 'obj');
   let from, to, title;
   if (state.stab === 'week') { const d = weekRange(state.date); from = d[0]; to = d[6]; title = 'Неделя ' + dmy(from) + ' – ' + dmy(to); }
   else { const bnd = monthBounds(state.date), p = parseIso(state.date); from = bnd[0]; to = bnd[1]; title = MONTHS[p.m] + ' ' + p.y; }
-  const s = summarize(inRange(from, to));
+  const list = allReports().filter(r => r.date >= from && r.date <= to), agg = salaryAgg(list);
   const g = el('div', 'sgrid');
-  g.append(cell('Всего зарплат', fmt(s.salary), true, 'pos-t'));
+  g.append(cell('Всего зарплат (все объекты)', fmt(agg.total), true, 'pos-t'));
   body.append(el('p', 'hint', title), g);
-  const emps = empList(s);
-  const box = el('div', 'week');
-  if (!emps.length) box.appendChild(el('div', 'empty', 'Нет данных за этот период'));
-  emps.forEach(x => {
-    const row = el('div');
-    row.append(el('span', '', x.name || 'Без имени'), el('b', '', x.days + ' дн. · ' + fmt(x.sum) + (x.bonus ? ' (' + (x.bonus > 0 ? 'премии +' : 'штрафы −') + fmt(Math.abs(x.bonus)) + ')' : '')));
-    box.appendChild(row);
-  });
-  body.append(el('h3', '', 'По сотрудникам'), box);
+  if (!list.length) { const e0 = el('div', 'week'); e0.appendChild(el('div', 'empty', 'Нет данных за этот период')); body.append(el('h3', '', 'По сотрудникам'), e0); return; }
+  if (state.sscope === 'all') {                           // общая зарплата: каждый сотрудник одной строкой по всем объектам
+    const box = el('div', 'week');
+    agg.people.forEach(p => {
+      const row = el('div'), ids = Object.keys(p.objs);
+      row.append(el('span', '', p.name || 'Без имени'), el('b', '', payText(Object.keys(p.dates).length, p.sum, p.bonus)));
+      if (ids.length > 1) row.appendChild(el('small', 'sub-line', ids.map(id => objName(id) + ' ' + fmt(p.objs[id].sum)).join(' · ')));   // с какого объекта сколько
+      box.appendChild(row);
+    });
+    if (!agg.people.length) box.appendChild(el('div', 'empty', 'Зарплат за этот период нет'));
+    body.append(el('h3', '', 'По сотрудникам'), box);
+  } else {                                                // по объектам: у каждого объекта своя сумма и свои сотрудники
+    const ids = []; list.forEach(r => { if (ids.indexOf(r.objectId) < 0) ids.push(r.objectId); });
+    ids.sort((a, b) => objects.findIndex(o => o.id === a) - objects.findIndex(o => o.id === b));
+    ids.forEach(id => {
+      const l = list.filter(r => r.objectId === id), s = summarize(l), grp = el('div', 'sal-group'), head = el('div', 'sal-head');
+      head.append(el('span', '', objName(id) + (id === state.objId ? ' · выбран' : '')), el('b', '', fmt(s.salary)));
+      const box = el('div', 'week');
+      empList(s).forEach(x => { const row = el('div'); row.append(el('span', '', x.name || 'Без имени'), el('b', '', payText(x.days, x.sum, x.bonus))); box.appendChild(row); });
+      if (!box.children.length) box.appendChild(el('div', 'empty', 'Зарплат за этот период нет'));
+      grp.append(head, box); body.appendChild(grp);
+    });
+  }
+}
+function switchSalScope(val) {
+  const same = state.sscope === val; state.sscope = val;
+  try { localStorage.setItem('finance_sal_scope', val); } catch (e) {}
+  renderSalaries();
+  if (!same) { swapAnim($('salaryBody'), val === 'obj' ? 1 : -1); haptic(35); }
 }
 
 /* ================= Текстовый отчёт (копируется в буфер обмена) ================= */
@@ -951,15 +991,15 @@ function pageGhost(oldEl, dir) {                          // копия уход
     else if (x.tagName === 'SELECT') { Array.from(d.options).forEach((o, k) => { if (k === x.selectedIndex) o.setAttribute('selected', ''); else o.removeAttribute('selected'); }); }
     else if (x.tagName === 'TEXTAREA') d.textContent = x.value; else d.setAttribute('value', x.value);
   });
-  g.style.cssText = 'top:' + r.top + 'px;left:' + r.left + 'px;width:' + r.width + 'px;--gx:' + (-dir * 64) + 'px;--gr:' + (dir * 7) + 'deg';
+  g.dataset.dir = dir; g.style.cssText = 'top:' + r.top + 'px;left:' + r.left + 'px;width:' + r.width + 'px';
   oldEl.parentNode.insertBefore(g, oldEl.nextSibling);
-  setTimeout(() => g.remove(), 520);
+  setTimeout(() => g.remove(), 320);
   return g;
 }
 function enterPage(el, dir) {                             // карточки новой страницы вылетают по очереди с лёгким наклоном
   if (!el || reducedMotion()) return;
   el.classList.remove('enter-f', 'enter-b'); void el.offsetWidth;
-  el.style.setProperty('--dx', (dir * 54) + 'px'); el.style.setProperty('--ry', (dir * -10) + 'deg');
+  el.style.setProperty('--dx', (dir * 16) + 'px');          // сдвиг не больше поля экрана (16px): страница никогда не становится шире экрана
   Array.from(el.children).forEach((c, i) => c.style.setProperty('--i', Math.min(i, 9)));
   el.classList.add(dir > 0 ? 'enter-f' : 'enter-b');
   clearTimeout(enterPage.t); enterPage.t = setTimeout(() => el.classList.remove('enter-f', 'enter-b'), 1500);
@@ -1060,6 +1100,8 @@ function bind() {
   });
   $('salWeekBtn').addEventListener('click', () => switchPeriod('stab', 'week'));
   $('salMonthBtn').addEventListener('click', () => switchPeriod('stab', 'month'));
+  $('salAllBtn').addEventListener('click', () => switchSalScope('all'));
+  $('salObjBtn').addEventListener('click', () => switchSalScope('obj'));
   document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => { haptic(30); showPage(Number(b.dataset.page)); }));
 }
 

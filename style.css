@@ -374,10 +374,10 @@ label.tile:focus-within{border-color:var(--gold);box-shadow:0 0 0 4px rgba(247,2
 .tabs .btn{position:relative;min-width:118px;transition:color .3s}
 .tabs .btn.active,.tabs .btn.active:hover{background:transparent;box-shadow:none;color:var(--gold-ink)}
 /* содержимое влетает со стороны движения пилюли, элементы — каскадом */
-@keyframes swinL{from{opacity:0;transform:translateX(38px) scale(.96);filter:blur(5px)}to{opacity:1;transform:none;filter:blur(0)}}
-@keyframes swinR{from{opacity:0;transform:translateX(-38px) scale(.96);filter:blur(5px)}to{opacity:1;transform:none;filter:blur(0)}}
-.swin-l{animation:swinL .55s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0ms)}
-.swin-r{animation:swinR .55s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0ms)}
+@keyframes swinL{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+@keyframes swinR{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+.swin-l{animation:swinL .42s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0ms)}
+.swin-r{animation:swinR .42s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0ms)}
 /* скрытый переключатель для тактильного отклика на iPhone */
 .hapt{position:fixed;left:-40px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none}
 /* компактная карточка «Показатели смены» */
@@ -533,12 +533,31 @@ label.tile:focus-within{border-color:var(--gold);box-shadow:0 0 0 4px rgba(247,2
 .bottom-nav .nav-btn{z-index:1}
 .bottom-nav .nav-btn.active,.bottom-nav .nav-btn.active:hover{background:transparent!important;border-color:transparent!important;box-shadow:none!important}
 /* уходящая страница */
-.page.ghost{position:fixed;margin:0;pointer-events:none;z-index:30;animation:ghostOut .42s cubic-bezier(.5,0,.85,.45) forwards;transform-origin:50% 25%}
-@keyframes ghostOut{to{opacity:0;transform:perspective(900px) translateX(var(--gx)) rotateY(var(--gr)) scale(.9);filter:blur(8px)}}
+.page.ghost{position:fixed;margin:0;pointer-events:none;z-index:30;animation:ghostOut .16s ease-out forwards}
+@keyframes ghostOut{to{opacity:0}}
 /* входящая страница: карточки вылетают каскадом */
-.page.enter-f>*,.page.enter-b>*{animation:cardIn .66s cubic-bezier(.2,.9,.25,1) both;animation-delay:calc(var(--i,0) * 62ms + 50ms)}
-@keyframes cardIn{
-  0%{opacity:0;transform:perspective(900px) translateX(var(--dx)) rotateY(var(--ry)) scale(.93);filter:blur(9px)}
-  55%{opacity:1;filter:blur(0)}
-  100%{opacity:1;transform:none;filter:blur(0)}}
+.page.enter-f>*,.page.enter-b>*{animation:cardIn .46s cubic-bezier(.22,.8,.3,1) both;animation-delay:calc(var(--i,0) * 38ms + 90ms);will-change:transform,opacity}
+@keyframes cardIn{from{opacity:0;transform:translate3d(var(--dx),10px,0) scale(.985)}to{opacity:1;transform:none}}
 .bottom-nav .nav-btn.active:hover{transform:none!important}
+
+
+/* ===== Без прыжков при переключении ===== */
+/* Раньше карточки на время анимации выезжали за край экрана: страница становилась шире экрана, и iPhone «ужимал» её целиком (шапка сдвигалась вверх на 6–10 px). Теперь ничего не может выйти за край. */
+html,body{overflow-x:hidden;overflow-x:clip}
+.app{overflow-x:hidden;overflow-x:clip}
+html{overflow-anchor:none}
+/* страница при показе больше не «выпрыгивает» сама: движение задают только карточки внутри неё */
+.app>.page{animation:none}
+
+/* ===== Зарплаты: переключатель «Все объекты / По объектам» ===== */
+.tabs-row{display:flex;flex-wrap:wrap;gap:0 12px}
+.tabs.eq{display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr}
+.tabs.eq .btn{min-width:0;padding-left:16px;padding-right:16px;white-space:nowrap}
+.sub-line{display:block;margin-top:2px;color:var(--mute);font-size:.74rem;font-weight:600;line-height:1.35}
+.sal-group{margin-top:16px}
+.sal-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:10px 14px;border-radius:14px;background:rgba(247,201,72,.08);border:1px solid rgba(247,201,72,.22);font-weight:800}
+.sal-head span{min-width:0}
+.sal-head b{color:var(--gold);white-space:nowrap}
+.sal-group .week{margin-top:6px}
+.week>div{flex-wrap:wrap}
+.week .sub-line{flex:1 1 100%;margin-top:0}

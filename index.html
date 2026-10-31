@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
 <title>Финансовый отчёт</title>
 <meta name="theme-color" content="#09090c">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23f7b500'/%3E%3Ctext x='32' y='45' font-size='38' font-weight='800' text-anchor='middle' fill='%231a1305' font-family='Arial'%3E%E2%82%BD%3C/text%3E%3C/svg%3E">
@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=24">
 </head>
 <body>
 <div id="boot" class="boot"><div class="spin"></div><p id="bootMsg">Загрузка…</p></div>
@@ -302,9 +302,15 @@
   <div class="page" id="page3" hidden>
   <section class="card">
     <h2>Зарплаты</h2>
-    <div class="tabs">
-      <button id="salWeekBtn" class="btn active">Неделя</button>
-      <button id="salMonthBtn" class="btn">Месяц</button>
+    <div class="tabs-row">
+      <div class="tabs eq">
+        <button id="salAllBtn" class="btn active">Все объекты</button>
+        <button id="salObjBtn" class="btn">По объектам</button>
+      </div>
+      <div class="tabs eq">
+        <button id="salWeekBtn" class="btn active">Неделя</button>
+        <button id="salMonthBtn" class="btn">Месяц</button>
+      </div>
     </div>
     <div id="salaryBody"></div>
   </section>
@@ -351,6 +357,6 @@
 <div id="printArea" aria-hidden="true"></div>
 <label id="hapt" class="hapt" aria-hidden="true"><input type="checkbox" switch tabindex="-1"></label>
 <div id="fx" aria-hidden="true"><div class="fx-sweep"></div><div class="fx-sweep b"></div><div class="fx-badge"><i class="fx-ring"></i><i class="fx-ring r2"></i><span class="fx-disc"></span><i class="fx-spark" style="--a:0deg"></i><i class="fx-spark" style="--a:45deg"></i><i class="fx-spark" style="--a:90deg"></i><i class="fx-spark" style="--a:135deg"></i><i class="fx-spark" style="--a:180deg"></i><i class="fx-spark" style="--a:225deg"></i><i class="fx-spark" style="--a:270deg"></i><i class="fx-spark" style="--a:315deg"></i><svg viewBox="0 0 52 52"><path class="fx-check" d="M14 27l8 8 16-17"/></svg></div></div>
-<script type="module" src="app.js?v=22"></script>
+<script type="module" src="app.js?v=24"></script>
 </body>
 </html>

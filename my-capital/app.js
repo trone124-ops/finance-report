@@ -7,7 +7,7 @@ const money=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(N
 const num=n=>Number(n)||0;
 const monthKey=d=>(d||'').slice(0,7);
 const monthNow=monthKey(today());
-const seed={balance:300000,transactions:[],goals:[{id:'retirement',name:'Пассивный доход к 50 годам',amount:0,saved:0,date:'',priority:'high',group:'important',note:'Долгосрочный ориентир: 100 000 ₽ в месяц'}],settings:{weeklyIncome:20000,weeklyExpense:8000,monthlySaving:20000,passiveTarget:100000,currentAge:20,targetAge:50},created:today()};
+const seed={balance:300000,transactions:[],goals:[],settings:{weeklyIncome:20000,weeklyExpense:8000,monthlySaving:20000,passiveTarget:100000,currentAge:20,targetAge:50},created:today()};
 let state=load();
 function load(){try{const s=JSON.parse(localStorage.getItem(KEY));return s&&typeof s==='object'?{...seed,...s,settings:{...seed.settings,...(s.settings||{})},transactions:Array.isArray(s.transactions)?s.transactions:[],goals:Array.isArray(s.goals)?s.goals:[]}:structuredClone(seed)}catch{return structuredClone(seed)}}
 function save(){localStorage.setItem(KEY,JSON.stringify(state));render()}

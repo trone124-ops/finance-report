@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090a0e"><title>MY CAPITAL — личный капитал</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+<header class="topbar"><a class="brand" href="#"><span class="brandmark">₽</span><span>MY <b>CAPITAL</b><small>Личная финансовая система</small></span></a><div class="top-actions"><span class="local"><i></i> Данные на этом устройстве</span><button class="iconbtn" id="exportBtn" title="Экспорт данных">⇩</button><button class="iconbtn" id="importBtn" title="Импорт данных">⇧</button><input type="file" id="importFile" accept="application/json" hidden></div></header>
+<main>
+<section class="hero">
+<div><p class="eyebrow">МОЯ ФИНАНСОВАЯ КАРТИНА</p><h1>Твой капитал.<br><em>Твои правила.</em></h1><p class="muted">Контролируй деньги, планируй цели и смотри, как растёт капитал.</p></div>
+<div class="balance-card"><div class="balance-label">ТЕКУЩИЙ КАПИТАЛ <button class="tiny" id="editBalance">Изменить</button></div><div class="balance" id="balance">300 000 ₽</div><div class="balance-foot"><span id="balanceHint">Стартовый капитал</span><span class="trend" id="monthDelta">—</span></div><div class="shine"></div></div>
+</section>
+<nav class="tabs" aria-label="Разделы"><button class="tab active" data-tab="overview">Обзор</button><button class="tab" data-tab="transactions">Операции</button><button class="tab" data-tab="goals">Мои цели</button><button class="tab" data-tab="analytics">Аналитика</button></nav>
+<section class="view active" id="view-overview">
+<div class="section-head"><div><p class="eyebrow">СЕЙЧАС</p><h2>Финансовые показатели</h2></div><button class="primary" id="addQuick">＋ Добавить операцию</button></div>
+<div class="stats-grid">
+<article class="stat"><span>Доходы за месяц</span><b class="positive" id="monthIncome">0 ₽</b><small id="incomeDaily">В среднем за день: 0 ₽</small></article>
+<article class="stat"><span>Расходы за месяц</span><b id="monthExpense">0 ₽</b><small id="expenseDaily">В среднем за день: 0 ₽</small></article>
+<article class="stat"><span>Чистый результат</span><b id="monthNet">0 ₽</b><small>Доходы минус расходы</small></article>
+<article class="stat"><span>Средний доход в день</span><b id="avgDay">0 ₽</b><small id="workDays">По дням с доходом</small></article>
+</div>
+<div class="two-col">
+<article class="panel"><div class="panel-head"><div><p class="eyebrow">ДВИЖЕНИЕ ДЕНЕГ</p><h3>Последние операции</h3></div><button class="textbtn" data-go="transactions">Все операции →</button></div><div id="recentList" class="recent-list"><div class="empty">Пока нет операций. Добавь первую — и здесь появится история.</div></div></article>
+<article class="panel"><div class="panel-head"><div><p class="eyebrow">ФИНАНСОВАЯ ЦЕЛЬ</p><h3>Приоритет накоплений</h3></div><button class="textbtn" data-go="goals">Все цели →</button></div><div id="goalPreview"><div class="empty">Добавь цель, чтобы видеть прогресс накоплений.</div></div></article>
+</div>
+<article class="panel allocation"><div class="panel-head"><div><p class="eyebrow">УМНОЕ РАСПРЕДЕЛЕНИЕ</p><h3>Как распределить свободные деньги</h3></div><span class="chip">Расчётный план</span></div><p class="muted small">План рассчитывается из месячного дохода и обязательных расходов. Это ориентир, а не автоматическое списание денег.</p><div id="allocation"></div></article>
+</section>
+<section class="view" id="view-transactions">
+<div class="section-head"><div><p class="eyebrow">УЧЁТ</p><h2>Доходы и расходы</h2><p class="muted">Записывай каждое поступление и списание — баланс пересчитывается автоматически.</p></div><button class="primary" id="addTransaction">＋ Новая операция</button></div>
+<div class="filters"><button class="filter active" data-filter="all">Все</button><button class="filter" data-filter="income">Доходы</button><button class="filter" data-filter="expense">Расходы</button></div>
+<div class="panel"><div id="transactionList"><div class="empty">Операций пока нет.</div></div></div>
+</section>
+<section class="view" id="view-goals">
+<div class="section-head"><div><p class="eyebrow">БУДУЩЕЕ</p><h2>Мои финансовые цели</h2><p class="muted">Разделяй важные накопления и цели на конкретный срок.</p></div><button class="primary" id="addGoal">＋ Добавить цель</button></div>
+<div class="goal-columns"><div><h3 class="column-title">Важное</h3><div id="importantGoals" class="goal-list"></div></div><div><h3 class="column-title">Планы и желания</h3><div id="otherGoals" class="goal-list"></div></div></div>
+<div class="panel"><div class="panel-head"><div><p class="eyebrow">СТРАТЕГИЯ</p><h3>План накоплений</h3></div></div><div id="goalPlan" class="muted">Добавь цели, чтобы рассчитать ежемесячные взносы.</div></div>
+</section>
+<section class="view" id="view-analytics">
+<div class="section-head"><div><p class="eyebrow">ЦИФРЫ БЕЗ ИЛЛЮЗИЙ</p><h2>Аналитика капитала</h2><p class="muted">Сводка по записям, которые ты внёс в приложение.</p></div></div>
+<div class="stats-grid"><article class="stat"><span>Всего доходов</span><b class="positive" id="allIncome">0 ₽</b></article><article class="stat"><span>Всего расходов</span><b id="allExpense">0 ₽</b></article><article class="stat"><span>Норма сбережений</span><b id="savingRate">—</b></article><article class="stat"><span>Активные цели</span><b id="activeGoals">0</b></article></div>
+<div class="panel"><div class="panel-head"><div><p class="eyebrow">ПО МЕСЯЦАМ</p><h3>Доходы и расходы</h3></div></div><div id="monthlyBars" class="bars"></div></div>
+<div class="panel"><div class="panel-head"><div><p class="eyebrow">НАСТРОЙКИ</p><h3>Финансовые ориентиры</h3></div></div>
+<div class="settings-grid"><label>Ожидаемый доход в неделю, ₽<input id="weeklyIncome" type="number" min="0" step="100"></label><label>Обычные расходы в неделю, ₽<input id="weeklyExpense" type="number" min="0" step="100"></label><label>Сколько можешь откладывать в месяц, ₽<input id="monthlySaving" type="number" min="0" step="500"></label><label>Желаемый пассивный доход в месяц, ₽<input id="passiveTarget" type="number" min="0" step="1000"></label><label>Возраст, к которому хочешь прийти к цели<input id="targetAge" type="number" min="1" max="100"></label><label>Текущий возраст<input id="currentAge" type="number" min="1" max="100"></label></div><button class="primary" id="saveSettings">Сохранить ориентиры</button><p class="muted small" id="settingsNote"></p></div>
+<div class="panel danger-zone"><div><h3>Резервная копия и данные</h3><p class="muted small">Данные хранятся только в памяти браузера на этом устройстве. Экспортируй копию, чтобы не потерять записи при очистке браузера или смене телефона.</p></div><div class="actions"><button class="secondary" id="exportBtn2">Скачать резервную копию</button><button class="secondary" id="importBtn2">Восстановить из копии</button><button class="danger" id="resetBtn">Сбросить все данные</button></div></div>
+</section>
+</main>
+<footer>MY CAPITAL <span>·</span> Твои данные остаются на этом устройстве</footer>
+</div>
+<dialog id="transactionDialog"><form method="dialog" id="transactionForm"><div class="dialog-head"><div><p class="eyebrow">ДЕНЕЖНОЕ ДВИЖЕНИЕ</p><h2 id="transactionTitle">Новая операция</h2></div><button class="iconbtn close" value="cancel" aria-label="Закрыть">×</button></div><div class="type-switch"><button type="button" class="type active" data-type="income">Доход</button><button type="button" class="type" data-type="expense">Расход</button></div><input type="hidden" id="txType" value="income"><label>Сумма, ₽<input id="txAmount" type="number" min="1" step="0.01" required placeholder="Например, 2500"></label><label>Категория<input id="txCategory" required maxlength="50" placeholder="Зарплата, продукты, транспорт…"></label><label>Дата<input id="txDate" type="date" required></label><label>Комментарий <span class="optional">необязательно</span><input id="txNote" maxlength="120" placeholder="Короткая заметка"></label><div class="dialog-actions"><button type="button" class="secondary" id="cancelTx">Отмена</button><button type="submit" class="primary">Сохранить</button></div></form></dialog>
+<dialog id="goalDialog"><form method="dialog" id="goalForm"><div class="dialog-head"><div><p class="eyebrow">МОЯ ЦЕЛЬ</p><h2>Новая цель</h2></div><button class="iconbtn close" value="cancel" aria-label="Закрыть">×</button></div><label>Название<input id="goalName" required maxlength="60" placeholder="Финансовая подушка"></label><label>Сколько нужно, ₽<input id="goalAmount" type="number" min="1" required></label><label>Уже накоплено, ₽<input id="goalSaved" type="number" min="0" value="0"></label><label>Срок достижения<input id="goalDate" type="date"></label><label>Приоритет<select id="goalPriority"><option value="high">Высокий</option><option value="medium" selected>Средний</option><option value="low">Низкий</option></select></label><label>Раздел<select id="goalGroup"><option value="important">Важное</option><option value="other">Планы и желания</option></select></label><div class="dialog-actions"><button type="button" class="secondary" id="cancelGoal">Отмена</button><button type="submit" class="primary">Сохранить цель</button></div></form></dialog>
+<dialog id="balanceDialog"><form method="dialog" id="balanceForm"><div class="dialog-head"><h2>Текущий капитал</h2><button class="iconbtn close" value="cancel">×</button></div><label>Сумма капитала, ₽<input id="balanceInput" type="number" step="0.01" required></label><p class="muted small">Укажи сумму всех денег и накоплений на текущий момент. Это стартовая база; операции будут менять её автоматически.</p><div class="dialog-actions"><button type="button" class="secondary" id="cancelBalance">Отмена</button><button type="submit" class="primary">Сохранить</button></div></form></dialog>
+<div id="toast" role="status"></div><script src="app.js"></script>
+</body></html>
